@@ -40,13 +40,25 @@ clear fpath k
 % Load formatted dFNC data
 load(fullfile(path{3}, 'FBIRN_DFNC_table.mat'));
 
-% Sort data by site
-[~, I(:,1)] = sort(analysis_data{:,"Site"});
-analysis_data = analysis_data(I,:);
-analysis_ID = analysis_ID(I,:);
-analysis_SCORE = analysis_SCORE(I,:);
-DFNC_FBIRN = DFNC_FBIRN(I,:);
-clear I
+% Confirm that IDs, data are properly indexed
+assert(all(str2double(string(cell2mat(analysis_ID))) == str2double(analysis_data.Properties.RowNames)), "Data labels are not properly ordered!");
+clear analysis_ID analysis_SCORE
+assert(all(strcmpi(string(FILE_ID), string(analysis_data.Properties.VariableNames))), "Clinical variables are not properly ordered!");
+clear FILE_ID
+
+% % Sort data by site
+% [~, I(:,1)] = sort(analysis_data{:,"Site"});
+% analysis_data = analysis_data(I,:);
+% DFNC_FBIRN = DFNC_FBIRN(I,:);
+% clear I
+
+% Set diagnosis, gender labels
+labels.diagnosis = ["SZ";"HC"];
+labels.gender = ["M";"F"];
+labels.data = ["Diagnosis", "Gender"];
+
+
+%% Index counters
 
 % Set figure counter
 N.fig = 1;
@@ -61,176 +73,16 @@ i(1,:) = contains(analysis_data.Properties.VariableNames, 'diagnosis');
 d = unique(analysis_data{:,i});
 N.conditions = numel(d);
 
-% Set diagnosis, gender labels
-labels.diagnosis = ["SZ";"HC"];
-labels.gender = ["M";"F"];
-labels.data = ["Diagnosis", "Gender"];
-
 % Index subjects
 I = cell(1,N.conditions);
 for j = 1:N.conditions
     I{j} = nnz(analysis_data{:,i} == d(j));
 end
 N.subjects = cell2table(I, 'VariableNames',labels.diagnosis);
-clear I d j i
-
-
-%% Extract and index time series
 
 % Locate & isolate site indices
 ind.site = unique(analysis_data{:,'Site'});
-
-% identify diagnosis column
-i(1,:) = contains(analysis_data.Properties.VariableNames, 'diagnosis');
-
-% get sitewise dFNC values
-ts.FNC.subj = cell(numel(ind.site), N.conditions);
-ts.FNC.site = ts.FNC.subj;
-ts.FNC.full = cell(1,N.conditions);
-I = ts;
-for j = 1:N.conditions
-    for k = 1:numel(ind.site)
-        ts.FNC.subj{k,j} = DFNC_FBIRN(analysis_data{:,'Site'}==ind.site(k) & analysis_data{:,i}==j); % organise time series by site, group
-        I.FNC.subj{k,j} = analysis_data(analysis_data{:,'Site'}==ind.site(k) & analysis_data{:,i}==j, :);
-        r = analysis_data(analysis_data{:,'Site'}==ind.site(k) & analysis_data{:,i}==j, :).Properties.RowNames';
-        r = str2num(cell2mat(reshape(repmat(r,[N.TR,1]), [], 1)));
-        ts.FNC.site{k,j} = cell2mat(ts.FNC.subj{k,j});
-%        d{k,j} = str2num(cell2mat(I.FNC.subj{k,j}.Properties.RowNames));
-        I.FNC.site{k,j} = repmat([ind.site(k), j], [numel(ts.FNC.subj{k,j})*N.TR,1]);
-        I.FNC.site{k,j} = horzcat(r, I.FNC.site{k,j});
-    end
-    ts.FNC.full{j} = cell2mat(ts.FNC.site(:,j));
-    I.FNC.full{j} = cell2mat(I.FNC.site(:,j));
-end
-clear r k j q c i
-
-% Concatenate dFNC time series (space = rows, time = columns)
-ts.FNC.concat = cat(1,ts.FNC.full{:});
-I.FNC.concat = cat(1,I.FNC.full{:});
-
-% Convert I to table
-labels.I = ["Subject", "Site", "Diagnosis"];
-I.FNC.concat = array2table(I.FNC.concat, 'VariableNames',labels.I);
-
-
-%% Remove site mean from time series
-
-% % get sitewise dFNC values
-% A = cell(numel(ind.site),1);
-% c = nan(numel(ind.site),1);
-% for k = 1:numel(ind.site)
-%     A{k} = DFNC_FBIRN(analysis_data{:,'Site'}==ind.site(k));
-%     A{k} = cell2mat(A{k});
-%     c(k) = max(abs(cat(1,ts.FNC.site{k,:})), [], 'all');
-% end
-% c = max(c,[],'all');
-% 
-% % plot mean FNC matrix for each site
-% F(N.fig) = figure; N.fig = N.fig + 1;
-% F(N.fig-1).Position = get(0,'screensize');
-% for k = 1:numel(ind.site)
-%     ax(1,k) = subplot(3, numel(ind.site), k);
-%     imagesc(icatb_vec2mat(mean(A{k}))); colormap jet; clim([-c c]);
-%     pbaspect([1 1 1]); colorbar;
-%     ylabel('Functional Networks'); xlabel('Functional Networks');
-%     title(strjoin(["Mean FNC of Site", num2str(k)]));
-% end
-% 
-% % subtract mean site FNC matrix from time-resolved dFNC values
-% for k = 1:numel(ind.site)
-%     for j = 1:N.conditions
-%         ts.FNC.site{k,j} = ts.FNC.site{k,j} - mean(A{k});
-%         for q = 1:numel(ts.FNC.subj{k,j})
-%             ts.FNC.subj{k,j}{q} = ts.FNC.subj{k,j}{q} - mean(A{k});
-%         end
-%     end
-% end
-% 
-% % plot mean site-wise group FNC after removing site means
-% for k = 1:numel(ind.site)
-%     for j = 1:N.conditions
-%         ax(j+1,1) = subplot(3, numel(ind.site), k+(numel(ind.site)*j));
-%         imagesc(icatb_vec2mat(mean(ts.FNC.site{k,j}))); colormap jet; clim([-c c]);
-%         pbaspect([1 1 1]); colorbar;
-%         ylabel('Functional Networks'); xlabel('Functional Networks');
-%         title([strjoin(["Mean FNC of Group", num2str(j), ", Site", num2str(k)]), strjoin(["- Mean of Site", num2str(k)])]);
-%     end
-% end
-% clear k j q
-% 
-% % Plot mean group FNC before and after site correction
-% F(N.fig) = figure; N.fig = N.fig + 1;
-% F(N.fig-1).Position = get(0,'screensize');
-% for j = 1:N.conditions
-%     % Pre-correction
-%     subplot(2, N.conditions, j);
-%     A = ts.FNC.concat(I.FNC.concat{:,"Diagnosis"}==j,:);
-%     imagesc(icatb_vec2mat(mean(A,1))); colormap jet; clim([-c c]);
-%     pbaspect([1 1 1]); colorbar;
-%     ylabel('Functional Networks'); xlabel('Functional Networks');
-%     title(strjoin(["Mean FNC of Group", num2str(j), "Pre-Correction"]));
-% 
-%     % Post-correction
-%     subplot(2, N.conditions, j+N.conditions);
-%     A = cell2mat(ts.FNC.site(:,j));
-%     imagesc(icatb_vec2mat(mean(A,1))); colormap jet; clim([-c c]);
-%     pbaspect([1 1 1]); colorbar;
-%     ylabel('Functional Networks'); xlabel('Functional Networks');
-%     title(strjoin(["Mean FNC of Group", num2str(j), "Post-Correction"]));
-% end
-% clear A j
-% 
-% % Concatenate site-corrected dFNC time series (space = rows, time = columns)
-% ts.FNC.full = cell(1,N.conditions);
-% I.FNC.full = ts.FNC.full;
-% for j = 1:N.conditions
-%     ts.FNC.full{j} = cell2mat(ts.FNC.site(:,j));
-%     I.FNC.full{j} = cell2mat(I.FNC.site(:,j));
-% end
-% clear k j q c i
-% ts.FNC.concat = cat(1,ts.FNC.full{:});
-% I.FNC.concat = cat(1,I.FNC.full{:});
-% 
-% % Convert I to table
-% labels.I = ["Subject", "Site", "Diagnosis"];
-% I.FNC.concat = array2table(I.FNC.concat, 'VariableNames',labels.I);
-
-
-%% Convert table variables (should be placed in separate script)
-
-% Convert I to table
-groups = labels.diagnosis(I.FNC.concat{:,"Diagnosis"});
-I.FNC.concat = convertvars(I.FNC.concat, "Diagnosis", 'string');
-I.FNC.concat{:,"Diagnosis"} = groups;
-clear groups
-
-% Identify table variables to change
-i(1,:) = contains(analysis_data.Properties.VariableNames, 'diagnosis');
-i(2,:) = contains(analysis_data.Properties.VariableNames, 'gender');
-
-% generate string arrays
-groups = labels.diagnosis(analysis_data{:,i(1,:)});
-gender = labels.gender(analysis_data{:,i(2,:)});
-
-% Rename & convert table variables
-analysis_data = renamevars(analysis_data, ["diagnosis(1:sz; 2:hc)","gender(1:male; 2:female)"], ["Diagnosis","Gender"]);
-analysis_data = convertvars(analysis_data, ["Diagnosis","Gender"], 'string');
-
-% Replace table numeric indices with strings
-analysis_data{:,i(1,:)} = groups;
-analysis_data{:,i(2,:)} = gender;
-clear groups gender i
-
-% Replace numeric missing data code with NaN
-analysis_data{:,5:end}(analysis_data{:,5:end} == -9999) = NaN;
-
-% Get subject indices
-ind.subject = nan(max(N.subjects{:,:},[],'all'), N.conditions);
-for k = 1:N.conditions
-    i = I.FNC.concat(strcmpi(I.FNC.concat{:,"Diagnosis"}, labels.diagnosis(k)), :);
-    ind.subject(1:N.subjects{:,k}, k) = unique(i{:,"Subject"});
-end
-clear i k
+clear I d j i
 
 
 %% Set analysis parameters
@@ -252,6 +104,31 @@ intercept = false;
 
 % Set parameter sweeps
 tstat = 3:0.5:5;
+
+
+%% Convert table variables (should be placed in separate script)
+
+% Identify table variables to change
+i(1,:) = contains(analysis_data.Properties.VariableNames, 'diagnosis');
+i(2,:) = contains(analysis_data.Properties.VariableNames, 'gender');
+
+% generate string arrays
+groups = labels.diagnosis(analysis_data{:,i(1,:)});
+gender = labels.gender(analysis_data{:,i(2,:)});
+
+% Convert variable type
+analysis_data = convertvars(analysis_data, ["diagnosis(1:sz; 2:hc)","gender(1:male; 2:female)"], "string");
+
+% Replace table numeric indices with strings
+analysis_data{:,i(1,:)} = groups;
+analysis_data{:,i(2,:)} = gender;
+clear groups gender i
+
+% Rename table variables
+analysis_data = renamevars(analysis_data, ["diagnosis(1:sz; 2:hc)","gender(1:male; 2:female)"], ["Diagnosis","Gender"]);
+
+% Replace numeric missing data code with NaN
+analysis_data{:,5:end}(analysis_data{:,5:end} == -9999) = NaN;
 
 
 %% Set region labels & maps
@@ -281,7 +158,6 @@ for i = 2:numel(r)
     labels.FND{r(i-1)+1:r(i)-1,"Functional Networks"} = repmat(labels.FDs{i-1,"Functional Domains"}, [r(i)-1-r(i-1) ,1]);
 end
 labels.FND(r(1:end-1),:) = [];
-clear i r
 
 % Establish FN-level map of FDs
 ind.FND = zeros(N.ROI, N.FD);
@@ -289,7 +165,7 @@ for d = 1:N.FD
     ind.FND(:,d) = strcmpi(labels.FND{:,"Functional Networks"}, labels.FDs{d,"Functional Domains"});
 end
 ind.FND = array2table(ind.FND, 'RowNames',labels.ROI.Properties.RowNames, 'VariableNames',labels.FDs{:,"Functional Domains"});
-clear d
+clear d i r
 
 
 %% Set number of ICs
@@ -327,6 +203,90 @@ clear fList nIter a
 clear a k n
 
 
+%% Concatenate and index time series
+
+% rename FNC data
+FNC.subj = DFNC_FBIRN;
+FNC.full = cell2mat(DFNC_FBIRN);
+
+% convert variables to row form
+I.subject = str2double(string(analysis_data.Properties.RowNames)');
+I.diagnosis = analysis_data{:,"Diagnosis"}';
+I.gender = analysis_data{:,"Gender"}';
+I.site = analysis_data{:,"Site"}';
+I.age = analysis_data{:,"age"}';
+
+% fill in data for each timepoint
+f = fieldnames(I);
+for j = 1:numel(f)
+    I.(f{j}) = repmat(I.(f{j}), [N.TR 1]);
+    I.(f{j}) = reshape(I.(f{j}), [sum(N.subjects{:,:})*N.TR 1]);    % reshape indices to column form
+end
+clear j f k
+
+% Confirm that indices are in proper order
+assert(all(unique(I.subject)==str2double(string(analysis_data.Properties.RowNames))), "Indices are out of order!");
+
+% convert index to table
+I = struct2table(I);
+
+
+%% Remove site mean from time series
+
+% Preallocate arrays
+A = cell(numel(ind.site),1);
+lim.c = max(abs(FNC.full), [], 'all');
+ax = gobjects(numel(ind.site), 1+2*N.conditions);
+
+% plot mean group FNC matrices for each site
+F(N.fig) = figure; F(N.fig).Position = get(0,'screensize');
+% T(N.fig) = tiledlayout(F(N.fig), N.conditions, numel(ind.site));
+N.fig = N.fig + 1;
+for k = 1:numel(ind.site)
+    for j = 1:N.conditions
+        ax(k,j) = subplot(N.conditions, numel(ind.site), k+numel(ind.site)*(j-1));
+        imagesc(ax(k,j), icatb_vec2mat(mean(FNC.full(I{:,'site'}==ind.site(k) & strcmpi(labels.diagnosis(j),I{:,'diagnosis'}),:), 1, "omitmissing")));
+        colormap jet; clim([-lim.c lim.c]); pbaspect([1 1 1]); colorbar;
+        ylabel('Functional Networks'); xlabel('Functional Networks');
+        title([strcat(["Mean FNC of ", labels.diagnosis(j), ", Site ", num2str(k)])]);
+    end
+end
+
+% remove sitewise means from FNC
+F(N.fig) = figure; F(N.fig).Position = get(0,'screensize');
+% T(N.fig) = tiledlayout(F(N.fig), 1+2*N.conditions, numel(ind.site));
+N.fig = N.fig + 1;
+for k = 1:numel(ind.site)
+    % get sitewise dFNC values
+    A{k} = FNC.full(I{:,'site'}==ind.site(k), :);
+    A{k} = mean(A{k}, 1, "omitmissing");
+
+    % get number of subjects per site
+    n = nnz(analysis_data{:,"Site"}==ind.site(k));
+
+    % plot mean site-wise FNC matrix for each site
+    ax(k,N.conditions+1) = subplot(N.conditions+1, numel(ind.site), k);
+    imagesc(icatb_vec2mat(A{k})); colormap jet;
+    clim([-lim.c lim.c]); pbaspect([1 1 1]); colorbar;
+    ylabel('Functional Networks'); xlabel('Functional Networks');
+    title(strjoin(["Mean FNC of Site", num2str(k)]));
+
+    % subtract mean site FNC matrix from time-resolved dFNC values
+    FNC.full(I{:,'site'}==ind.site(k),:) = FNC.full(I{:,'site'}==ind.site(k),:) - A{k};
+    FNC.subj(analysis_data{:,"Site"}==ind.site(k)) = cellfun(@minus, FNC.subj(analysis_data{:,"Site"}==ind.site(k)), repmat({repmat(A{k}, [N.TR 1])}, [n 1]), 'UniformOutput', false);
+    
+    % plot mean site-wise group FNC after removing site means
+    for j = 1:N.conditions
+        ax(k,j+N.conditions+1) = subplot(N.conditions+1, numel(ind.site), k+numel(ind.site)*j);
+        imagesc(icatb_vec2mat(mean(FNC.full(I{:,'site'}==ind.site(k) & strcmpi(labels.diagnosis(j),I{:,'diagnosis'}),:), 1, "omitmissing")));
+        colormap jet; clim([-lim.c lim.c]); pbaspect([1 1 1]); colorbar;
+        ylabel('Functional Networks'); xlabel('Functional Networks');
+        title([strcat(["Mean FNC of ", labels.diagnosis(j), ", Site ", num2str(k)]), strjoin([" - Mean of Site", num2str(k)])]);
+    end
+end
+clear k j A n
+
+
 %% Visualise static FNC matrix with indices
 
 % subject-level sFNC
@@ -334,14 +294,23 @@ sFNC{1} = cell2mat(cellfun(@mean, DFNC_FBIRN, 'UniformOutput', false));
 sFNC{1} = icatb_vec2mat(sFNC{1});       % Convert to square matrices
 
 % group-level sFNC
-sFNC{2} = cell(1,N.conditions);
-for k = 1:N.conditions
-    sFNC{2}{k} = cell2mat(cellfun(@mean, DFNC_FBIRN(strcmpi(analysis_data{:,"Diagnosis"},labels.diagnosis(k))), 'UniformOutput', false));
-    sFNC{2}{k} = icatb_vec2mat(sFNC{2}{k});   % Convert to square matrices
-end
-clear k
+sFNC{2} = nan(N.conditions, N.ROI, N.ROI);
+F(N.fig) = figure; F(N.fig).Position = get(0,'screensize');
+N.fig = N.fig + 1;
+for c = 1:N.conditions
+    % compute mean group-level FNC for condition
+    sFNC{2}(c,:,:) = mean(sFNC{1}(strcmpi(analysis_data{:,"Diagnosis"},labels.diagnosis(c)),:,:),1,"omitmissing");
 
-% % Check if need intercept term
+    % Visualize group sFNC
+    a(1,c) = subplot(1, N.conditions, c);
+    imagesc(squeeze(sFNC{2}(c,:,:))); colormap jet;
+    clim([-lim.c lim.c]); pbaspect([1 1 1]); colorbar;
+    ylabel('Functional Networks'); xlabel('Functional Networks');
+    title(strjoin(["Mean FNC of", labels.diagnosis(c)]));
+end
+clear c
+
+% % Check if need NBS intercept term
 % if intercept == true
 % 	I = horzcat(ones(size(I,1),1), I);
 % end
@@ -393,13 +362,8 @@ clear k
 %% Isolate components & activity from dFNC
 
 % extract components & activities from dFNC
-% [weights,sphere,activations] = icatb_runica(ts, 'ncomps',N.IC);
-% weights = weights';
-% [activities, memberships, W] = fastica(ts, 'numOfIC', N.IC, 'verbose','off'); % time series input should be in format space x time
-
-% extract components & activities from dFNC
-[whitesig, dewhiteM] = icatb_calculate_pca(ts.FNC.concat, N.IC);    % ICA runs along the first (column) dimension.
-[~, ~, A, sources.Full] = icatb_icaAlgorithm(1, whitesig');          %   for spatial ICA, orient data as space x time
+[whitesig, dewhiteM] = icatb_calculate_pca(FNC.full, N.IC);     % ICA runs along the first (column) dimension.
+[~, ~, A, sources.Full] = icatb_icaAlgorithm(1, whitesig');     %   for spatial ICA, orient data as space x time
 A = dewhiteM*A;                                                 %   for temporal ICA, orient data as time x space
 W = pinv(A);
 
@@ -413,12 +377,12 @@ mask.Between = ~mask.Within;
 mask.Full = mask.Within+mask.Between;
 
 % Map time series to within- and between-domain maps
-ts.FNC.Within = ts.FNC.concat.*repmat(mask.Within', [N.TR*sum(N.subjects{:,:}), 1]);
-ts.FNC.Between = ts.FNC.concat.*repmat(mask.Between', [N.TR*sum(N.subjects{:,:}), 1]);
+FNC.Within = FNC.full.*repmat(mask.Within', [N.TR*sum(N.subjects{:,:}), 1]);
+FNC.Between = FNC.full.*repmat(mask.Between', [N.TR*sum(N.subjects{:,:}), 1]);
 
 % Map time series to within- and between-domain maps
-sources.Within = W*ts.FNC.Within'; sources.Within = sources.Within';
-sources.Between = W*ts.FNC.Between'; sources.Between = sources.Between';
+sources.Within = W*FNC.Within'; sources.Within = sources.Within';
+sources.Between = W*FNC.Between'; sources.Between = sources.Between';
 
 % Set colorbar, y-limits
 limits.color = max(abs(W),[],'all');        % A = mixing matrix; W = unmixing matrix
@@ -428,14 +392,6 @@ limits.y = max(abs(sources.Full),[],'all');   % ts.sources.full = component time
 N.samplot = min([5, N.IC]);
 C = nchoosek(1:N.IC, N.samplot);
 C = C(ceil(rand*size(C,1)),:);
-    
-% Get subject indices
-ind.subject = nan(max(N.subjects{:,:},[],'all'), N.conditions);
-for k = 1:N.conditions
-    i = I.FNC.concat(strcmpi(I.FNC.concat{:,"Diagnosis"}, labels.diagnosis(k)), :);
-    ind.subject(1:N.subjects{:,k}, k) = unique(i{:,"Subject"});
-end
-clear i k
 
 
 %% Loop through all, within-domain, between-domain analyses
