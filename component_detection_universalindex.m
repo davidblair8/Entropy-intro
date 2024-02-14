@@ -193,7 +193,7 @@ fileName = fullfile("Domains", strcat(num2str(N.IC), "ICs"));
 fList = dir(fullfile(path{4}, strcat(strjoin([fileName, "iteration"], '-'), '*.mat')));	% Get file list
 a = false(numel(fList),1);
 for n = 1:numel(fList)
-    a(n) = matches("iteration", strsplit(fList(n).name, '_'));
+    a(n) = matches("iteration", strsplit(fLis.name, '_'));
 end
 nIter = numel(fList)-sum(a)+1;
 
@@ -460,32 +460,21 @@ entropy = array2table(entropy, "RowNames",analysis_data.Properties.RowNames, "Va
 
 %% Test for group-level changes
 
+% Compile entropy array: subject x condition x component
+E = nan(max(N.subjects{:,:}), N.conditions, N.IC+1);
+for k = 1:N.conditions
+    for c = 1:N.IC
+        E(1:N.subjects{:,labels.diagnosis(k)},k,c) = entropy{strcmpi(analysis_data{:,"Diagnosis"}, labels.diagnosis(k)), strcat("Comp",num2str(c))};
+    end
+    E(1:N.subjects{:,labels.diagnosis(k)},k, N.IC+1) = entropy{strcmpi(analysis_data{:,"Diagnosis"}, labels.diagnosis(k)), "Joint"};
+end
+
 % component entropy comparisons
-E = nan(max(N.subjects{:,:}), N.conditions);
 p = table('Size',[N.IC+1,3], 'VariableTypes',{'double','double','double'}, 'VariableNames',["t" "ks" "perm"], 'RowNames',entropy.Properties.VariableNames);
 h = table('Size',[N.IC+1,3], 'VariableTypes',{'logical','logical','logical'}, 'VariableNames',["t" "ks" "perm"], 'RowNames',entropy.Properties.VariableNames);
 for c = 1:N.IC
-    for k = 1:N.conditions
-        E(1:N.subjects{:,labels.diagnosis(k)},k) = entropy{strcmpi(analysis_data{:,"Diagnosis"}, labels.diagnosis(k)), strcat("Comp",num2str(c))};
-    end
-    [h(c,:), p(c,:)] = sigtest(E);
+    [h(c,:), p(c,:)] = sigtest(squeeze(E(:,:,c)));
 end
-
-% joint entropy comparisons
-for c = 1:N.conditions
-    E(1:N.subjects{:,labels.diagnosis(c)},c) = entropy{strcmpi(analysis_data{:,"Diagnosis"}, labels.diagnosis(c)), "Joint"};
-end
-[h("Joint",:), p("Joint",:)] = sigtest(E);
-if h{"Joint",'t'}
-    disp(strjoin(["Student's two-sample t-test shows significant difference between patient and control joint entropy (p = .", num2str(p{"Joint",'t'}), ")."], " "));
-end
-if h{"Joint",'ks'}
-    disp(strjoin(["Kolmogorov-Smirnov two-tailed test shows significant difference between patient and control joint entropy (p = .", num2str(p{"Joint",'ks'}), ")."], " "));
-end
-if h{"Joint",'perm'}
-    disp(strjoin(["Difference-of-means permutation test shows significant difference between patient and control joint entropy (p = .", num2str(p{"Joint",'perm'}), ")."], " "));
-end
-clear c k E
 
 % multiple-comparison correction
 FDR = nan(N.IC,2);
@@ -519,6 +508,19 @@ disp(strjoin(["Student's two-sample t-test detects", num2str(nnz(FDR{:,"Student'
 disp(strjoin(["Kolmogorov-Smirnov two-tailed test detects", num2str(nnz(FDR{:,"Kolmogorov-Smirnov"})), "significant ICs"], " "));
 disp(strjoin(["Difference-of-means permutation test detects", num2str(nnz(FDR{:,"Permutation"})), "significant ICs"], " "));
 
+% joint entropy comparisons
+[h("Joint",:), p("Joint",:)] = sigtest(squeeze(E(:,:,N.IC+1)));
+if h{"Joint",'t'}
+    disp(strjoin(["Student's two-sample t-test shows significant difference between patient and control joint entropy (p = .", num2str(p{"Joint",'t'}), ")."], " "));
+end
+if h{"Joint",'ks'}
+    disp(strjoin(["Kolmogorov-Smirnov two-tailed test shows significant difference between patient and control joint entropy (p = .", num2str(p{"Joint",'ks'}), ")."], " "));
+end
+if h{"Joint",'perm'}
+    disp(strjoin(["Difference-of-means permutation test shows significant difference between patient and control joint entropy (p = .", num2str(p{"Joint",'perm'}), ")."], " "));
+end
+clear c k
+
 
 %% Compile tables: entropy means, standard deviations
 
@@ -537,37 +539,42 @@ disp(strjoin(["Difference-of-means permutation test detects", num2str(nnz(FDR{:,
 % Visualise joint entropy of both conditions
 F(N.fig) = figure; N.fig = N.fig + 1;
 F(N.fig-1).Position = get(0,'screensize'); hold on;
-boxplot(e.joint, labels.diagnosis, 'Notch','on');
-ylim([min(e.joint,[],'all','omitnan')-10, max(e.joint,[],'all')+10]);
-title(strcat([T(n), "Joint Entropy"]), 'FontSize',16); ylabel("Joint Entropy");
-if isfield(h.joint, "t") && h.joint{:,'t'}
+boxplot(squeeze(E(:,:,N.IC+1)), labels.diagnosis, 'Notch','on');
+ylim([min(squeeze(E(:,:,N.IC+1)),[],'all',"omitmissing")-10, max(squeeze(E(:,:,N.IC+1)),[],'all',"omitmissing")+10]);
+title("Joint Entropy", 'FontSize',16); ylabel("Joint Entropy");
+if h{"Joint",'t'}
     axes = gca;
-    plot(1:2, [max(e.joint,[],'all','omitnan')+3, max(e.joint,[],'all','omitnan')+3], 'k-', 'LineWidth',1);
-    plot(1.5, max(e.joint,[],'all','omitnan')+5, 'k*', 'MarkerSize',10);
-elseif h.joint{:,'ks'}
+    plot(1:2, [max(squeeze(E(:,:,N.IC+1)),[],'all','omitnan')+3, max(squeeze(E(:,:,N.IC+1)),[],'all','omitnan')+3], 'k-', 'LineWidth',1);
+    plot(1.5, max(squeeze(E(:,:,N.IC+1)),[],'all','omitnan')+5, 'k*', 'MarkerSize',10);
+elseif h{"Joint",'ks'}
     axes = gca;
-    plot(1:2, [max(e.joint,[],'all','omitnan')+3, max(e.joint,[],'all','omitnan')+3], 'k-', 'LineWidth',1);
-    plot(1.5, max(e.joint,[],'all','omitnan')+5, 'k*', 'MarkerSize',10);
+    plot(1:2, [max(squeeze(E(:,:,N.IC+1)),[],'all','omitnan')+3, max(squeeze(E(:,:,N.IC+1)),[],'all','omitnan')+3], 'k-', 'LineWidth',1);
+    plot(1.5, max(squeeze(E(:,:,N.IC+1)),[],'all','omitnan')+5, 'k*', 'MarkerSize',10);
 end
-
 
 % Plot significantly differing ICs
 if isfield(ind, 'e')
     F(N.fig) = figure; N.fig = N.fig + 1;
     F(N.fig-1).Position = get(0,'screensize');
     for j = 1:numel(ind.e)
+        % compile time series
+        ts = nan(N.TR*max(N.subjects{:,:}), N.conditions);
+        for k = 1:N.conditions
+            ts(1:N.TR*N.subjects{:,labels.diagnosis(k)},k) = sources(strcmpi(I{:,"diagnosis"}, labels.diagnosis(k)), ind.e(j));
+        end
+
         % Plot ICA source matrices
         ax(j,1) = subplot(3, numel(ind.e), j);
-        imagesc(icatb_vec2mat(W(ind.e(j),:).*mask')); colormap jet; clim([-lim.color lim.color]);
+        imagesc(icatb_vec2mat(W(ind.e(j),:))); colormap jet; clim([-lim.color lim.color]);
         pbaspect([1 1 1]); colorbar; hold on
         ylabel('Functional Networks'); xlabel('Functional Networks');
-        title(strjoin([T(n), "FNC of Component", num2str(ind.e(j))]), 'FontSize',16);
+        title(strjoin(["FNC of Component", num2str(ind.e(j))]), 'FontSize',16);
         set(ax(j,1), {'XLim','YLim','XTick','YTick'}, {[0.5 N.ROI+0.5], [0.6 N.ROI+0.5], [], []}); hold on;
 
         % Plot time series
         ax(j,2) = subplot(3, numel(ind.e), j+numel(ind.e)); hold on
-        plot(1:N.TR*max(N.subjects{:,:}), ts.sources.ic{ind.e(j)}); hold on
-        title({strjoin([T(n), "Time Course of "]), strjoin(["Component", num2str(ind.e(j))], " ")}, 'FontSize',16);
+        plot(1:N.TR*max(N.subjects{:,:}), ts); hold on
+        title({"Time Course of ", strjoin(["Component", num2str(ind.e(j))], " ")}, 'FontSize',16);
         set(ax(j,2), {'XTick', 'XTickLabels', 'XLim', 'YLim'}, {0:N.TR:max(N.subjects{:,:})*N.TR, [], [0 max(N.subjects{:,:})*N.TR], [-lim.y lim.y]});
         legend(labels.diagnosis);
         ylabel("Activity");
@@ -575,14 +582,15 @@ if isfield(ind, 'e')
 
         % Plot entropies
         ax(j,3) = subplot(3, numel(ind.e), j+(2*numel(ind.e))); hold on
-        boxplot(squeeze(e.comp(ind.e(j),:,:)), labels.diagnosis, 'Notch','on');
-        ylim([min(e.comp(ind.e(j),:,:),[],'all')-2, max(e.comp(ind.e(j),:,:),[],'all','omitnan')+2]);
-        title({strjoin([T(n), "Group Entropies of"]), strjoin(["Component", num2str(ind.e(j))], " ")}, 'FontSize',16);
+        boxplot(squeeze(E(:,:,ind.e(j))), labels.diagnosis, 'Notch','on');
+        ylim([min(E(:,:,ind.e(j)),[],'all')-2, max(E(:,:,ind.e(j)),[],'all','omitnan')+2]);
+        title({"Group Entropies of", strjoin(["Component", num2str(ind.e(j))], " ")}, 'FontSize',16);
         ylabel("Shannon Entropy");
-        plot(1:2, [max(e.comp(ind.e(j),:,:),[],'all','omitnan')+0.5, max(e.comp(ind.e(j),:,:),[],'all','omitnan')+0.5], 'k-', 'LineWidth',1);
-        plot(1.5, max(e.comp(ind.e(j),:,:),[],'all','omitnan')+1, 'k*', 'MarkerSize',10);
+        plot(1:2, [max(E(:,:,ind.e(j)),[],'all','omitnan')+0.5, max(E(:,:,ind.e(j)),[],'all','omitnan')+0.5], 'k-', 'LineWidth',1);
+        plot(1.5, max(E(:,:,ind.e(j)),[],'all','omitnan')+1, 'k*', 'MarkerSize',10);
     end
 end
+clear k ts E
 
 
 %% Regress clinical variables against entropy
@@ -705,7 +713,7 @@ I.sources.subj;
 % corrvals = num2cell(corrvals);
 % corrvals(:,1) = analysis_data.Properties.VariableNames(cell2mat(corrvals(:,1)));
 % corrvals = cell2table(corrvals, 'VariableNames',["Variable", "Component", "rho", "p"]);
-clear n sm s c k j
+clear n sm s c k j ts E
 
 
 %% Save results & figure(s)
