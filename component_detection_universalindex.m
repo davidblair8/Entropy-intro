@@ -297,6 +297,7 @@ sFNC{1} = icatb_vec2mat(sFNC{1});       % Convert to square matrices
 sFNC{2} = nan(N.conditions, N.ROI, N.ROI);
 F(N.fig) = figure; F(N.fig).Position = get(0,'screensize');
 N.fig = N.fig + 1;
+lim.c = max(abs(FNC.full), [], 'all');
 for c = 1:N.conditions
     % compute mean group-level FNC for condition
     sFNC{2}(c,:,:) = mean(sFNC{1}(strcmpi(analysis_data{:,"Diagnosis"},labels.diagnosis(c)),:,:),1,"omitmissing");
@@ -359,6 +360,38 @@ clear c
 % clear k
 
 
+%% Regress clinical variables against FNC time series
+
+% set up regression predictor matrix
+X = I;
+X = convertvars(X, ["diagnosis" "gender"], 'double');
+X{:,"diagnosis"} = strcmpi(labels.diagnosis(1), I{:,"diagnosis"});
+X{:,"gender"} = strcmpi(labels.gender(1), I{:,"gender"});
+X = renamevars(X, ["diagnosis" "gender"], ["diagnosis" "gender (1=M, 0=F)"]);
+X{:,"subject"} = 1;
+
+% regress predictors against time series data
+b = nan(size(X,2), N.ROI*(N.ROI-1)/2);
+bint = nan(size(X,2), 2, N.ROI*(N.ROI-1)/2);
+r = nan(N.TR*sum(N.subjects{:,:}), N.ROI*(N.ROI-1)/2);
+rint = nan(N.TR*sum(N.subjects{:,:}), 2, N.ROI*(N.ROI-1)/2);
+stats = nan(N.ROI*(N.ROI-1)/2, 4);
+for f = 1:(N.ROI*(N.ROI-1)/2)
+    [b(:,f),bint(:,:,f), r(:,f),rint(:,:,f), stats(f,:)] = regress(FNC.full(:,f), table2array(X));
+end
+stats = array2table(stats,"VariableNames",["R^2", "F-statistic", "F-statistic p-value", "error variance"]);
+b = array2table(b', "VariableNames",I.Properties.VariableNames);
+
+% fit multiple linear regression on each component + joint entropy
+a = nan(size(X,2)+1, (N.ROI*(N.ROI-1)/2));
+for f = 1:(N.ROI*(N.ROI-1)/2)
+    [a(:,f), sts(f)] = robustfit(table2array(X), FNC.full(:,f), [], [], 'on');
+end
+a = array2table(a', "VariableNames",string(["constant", I.Properties.VariableNames]));
+sts = struct2table(sts);
+clear f
+
+
 %% Isolate components & activity from dFNC
 
 % extract components & activities from dFNC
@@ -378,6 +411,39 @@ lim.y = max(abs(sources),[],'all');   % ts.sources.full = component time courses
 N.samplot = min([5, N.IC]);
 C = nchoosek(1:N.IC, N.samplot);
 C = C(ceil(rand*size(C,1)),:);
+
+
+%% Regress clinical variables against source time series
+
+% set up regression predictor matrix
+X = I;
+X = convertvars(X, ["diagnosis" "gender"], 'double');
+X{:,"diagnosis"} = strcmpi(labels.diagnosis(1), I{:,"diagnosis"});
+X{:,"gender"} = strcmpi(labels.gender(1), I{:,"gender"});
+X = renamevars(X, ["diagnosis" "gender"], ["diagnosis" "gender (1=M, 0=F)"]);
+X{:,"subject"} = 1;
+
+% regress predictors against time series data
+b = nan(size(X,2), N.IC);
+bint = nan(size(X,2), 2, N.IC);
+r = nan(N.TR*sum(N.subjects{:,:}), N.IC);
+rint = nan(N.TR*sum(N.subjects{:,:}), 2, N.IC);
+stats = nan(N.IC, 4);
+for c = 1:N.IC
+    [b(:,c),bint(:,:,c), r(:,c),rint(:,:,c), stats(c,:)] = regress(sources(:,c), table2array(X));
+end
+stats = array2table(stats,"VariableNames",["R^2", "F-statistic", "F-statistic p-value", "error variance"]);
+b = array2table(b', "VariableNames",I.Properties.VariableNames);
+clear c
+
+% fit multiple linear regression on each component + joint entropy
+a = nan(size(X,2)+1, N.IC);
+for c = 1:N.IC
+    [a(:,c), sts(c)] = robustfit(table2array(X), sources(:,c), [], [], 'on');
+end
+a = array2table(a', "VariableNames",string(["constant", I.Properties.VariableNames]));
+sts = struct2table(sts);
+clear c
 
 
 %% Remove site means from ICA components
@@ -456,6 +522,38 @@ E(N.IC+1) = "Joint";
 
 % Convert entropy to table
 entropy = array2table(entropy, "RowNames",analysis_data.Properties.RowNames, "VariableNames",E);
+
+
+%% Regress clinical variables against entropy
+
+% Format regression variables
+X = analysis_data;
+X = convertvars(X, labels.data, 'double');
+X{:,"Diagnosis"} = strcmpi(labels.diagnosis(1), analysis_data{:,"Diagnosis"});
+X{:,"Gender"} = strcmpi(labels.gender(1), analysis_data{:,"Gender"});
+X = renamevars(X, labels.data, ["diagnosis" "gender (1=M, 0=F)"]);
+
+% Run multiple linear regression on each component + joint entropy
+b = nan(size(X,2), N.IC+1);
+bint = nan(size(X,2), 2, N.IC+1);
+r = nan(sum(N.subjects{:,:}), N.IC+1);
+rint = nan(sum(N.subjects{:,:}), 2, N.IC+1);
+stats = nan(N.IC+1, 4);
+for c = 1:N.IC+1
+    [b(:,c),bint(:,:,c), r(:,c),rint(:,:,c), stats(c,:)] = regress(entropy{:,c}, table2array(X));
+end
+stats = array2table(stats, "VariableNames",["R^2", "F-statistic", "F-statistic p-value", "error variance"], "RowNames",entropy.Properties.VariableNames);
+b = array2table(b, "VariableNames",entropy.Properties.VariableNames, "RowNames",analysis_data.Properties.VariableNames);
+r = array2table(r, "VariableNames",entropy.Properties.VariableNames, "RowNames",analysis_data.Properties.RowNames);
+clear c
+
+% fit multiple linear regression on each component + joint entropy
+a = nan(size(X,2)+1, N.IC+1);
+for c = 1:N.IC+1
+    [a(:,c), sts(c)] = robustfit(table2array(X), entropy{:,c}, [], [], 'on');
+end
+a = array2table(a', "RowNames",entropy.Properties.VariableNames, "VariableNames",string(["constant", analysis_data.Properties.VariableNames]));
+sts = struct2table(sts, "RowNames",entropy.Properties.VariableNames);
 
 
 %% Test for group-level changes
@@ -593,20 +691,8 @@ end
 clear k ts E
 
 
-%% Regress clinical variables against entropy
+%% Correlate entropy score against clinical variables
 
-% Format clinical variables
-
-% Set up multiple linear regression
-e.joint;
-e.comp;
-I.sources.subj;
-[b, stats] = robustfit();
-[b,bint, r,rint, stats] = regress();
-
-
-% %% Correlate entropy score against clinical variables
-% 
 % % Collate matrix (table) of joint entropy scores & component entropeis
 % edata = nan(nnz(isfinite(e.joint)), size(e.comp,1)+1);      % set table
 % for j = 1:N.conditions
