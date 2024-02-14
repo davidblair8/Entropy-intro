@@ -460,30 +460,30 @@ entropy = array2table(entropy, "RowNames",analysis_data.Properties.RowNames, "Va
 
 %% Test for group-level changes
 
-% joint entropy
+% component entropy comparisons
 E = nan(max(N.subjects{:,:}), N.conditions);
-for c = 1:N.conditions
-    E(1:N.subjects{:,labels.diagnosis(c)},c) = entropy{strcmpi(analysis_data{:,"Diagnosis"}, labels.diagnosis(c)), "Joint"};
-end
-[h.joint, p.joint] = sigtest(E);
-if isfield(h.joint, 't') && h.joint{:,'t'}
-    disp(strjoin(["Student's two-sample t-test shows significant difference between patient and control joint entropy (p = .", num2str(p.joint.t), ")."], " "));
-end
-if h.joint.ks
-    disp(strjoin(["Kolmogorov-Smirnov two-tailed test shows significant difference between patient and control joint entropy (p = .", num2str(p.joint.ks), ")."], " "));
-end
-if h.joint.perm
-    disp(strjoin(["Difference-of-means permutation test shows significant difference between patient and control joint entropy (p = .", num2str(p.joint.perm), ")."], " "));
-end
-
-% component entropy
-p.comp = table('Size',[N.IC,3], 'VariableTypes',{'double','double','double'},'VariableNames',["t" "ks" "perm"]);
-h.comp = table('Size',[N.IC,3], 'VariableTypes',{'logical','logical','logical'},'VariableNames',["t" "ks" "perm"]);
+p = table('Size',[N.IC+1,3], 'VariableTypes',{'double','double','double'}, 'VariableNames',["t" "ks" "perm"], 'RowNames',entropy.Properties.VariableNames);
+h = table('Size',[N.IC+1,3], 'VariableTypes',{'logical','logical','logical'}, 'VariableNames',["t" "ks" "perm"], 'RowNames',entropy.Properties.VariableNames);
 for c = 1:N.IC
     for k = 1:N.conditions
         E(1:N.subjects{:,labels.diagnosis(k)},k) = entropy{strcmpi(analysis_data{:,"Diagnosis"}, labels.diagnosis(k)), strcat("Comp",num2str(c))};
     end
-    [h.comp(c,:), p.comp(c,:)] = sigtest(E);
+    [h(c,:), p(c,:)] = sigtest(E);
+end
+
+% joint entropy comparisons
+for c = 1:N.conditions
+    E(1:N.subjects{:,labels.diagnosis(c)},c) = entropy{strcmpi(analysis_data{:,"Diagnosis"}, labels.diagnosis(c)), "Joint"};
+end
+[h("Joint",:), p("Joint",:)] = sigtest(E);
+if h{"Joint",'t'}
+    disp(strjoin(["Student's two-sample t-test shows significant difference between patient and control joint entropy (p = .", num2str(p{"Joint",'t'}), ")."], " "));
+end
+if h{"Joint",'ks'}
+    disp(strjoin(["Kolmogorov-Smirnov two-tailed test shows significant difference between patient and control joint entropy (p = .", num2str(p{"Joint",'ks'}), ")."], " "));
+end
+if h{"Joint",'perm'}
+    disp(strjoin(["Difference-of-means permutation test shows significant difference between patient and control joint entropy (p = .", num2str(p{"Joint",'perm'}), ")."], " "));
 end
 clear c k E
 
@@ -491,9 +491,9 @@ clear c k E
 FDR = nan(N.IC,2);
 Bonferroni = FDR;
 Sidak = FDR;
-[FDR(:,1), Bonferroni(:,1), Sidak(:,1)] = mCompCorr(N.IC, p.comp{:,"t"}, 0.05);
-[FDR(:,2), Bonferroni(:,2), Sidak(:,2)] = mCompCorr(N.IC, p.comp{:,"ks"}, 0.05);
-[FDR(:,3), Bonferroni(:,3), Sidak(:,3)] = mCompCorr(N.IC, p.comp{:,"perm"}, 0.05);
+[FDR(:,1), Bonferroni(:,1), Sidak(:,1)] = mCompCorr(N.IC, p{1:N.IC,"t"}, 0.05);
+[FDR(:,2), Bonferroni(:,2), Sidak(:,2)] = mCompCorr(N.IC, p{1:N.IC,"ks"}, 0.05);
+[FDR(:,3), Bonferroni(:,3), Sidak(:,3)] = mCompCorr(N.IC, p{1:N.IC,"perm"}, 0.05);
 
 % convert NaNs to false
 FDR(isnan(FDR)) = false;
@@ -501,9 +501,9 @@ Bonferroni(isnan(Bonferroni)) = false;
 Sidak(isnan(Sidak)) = false;
 
 % convert to logical arrays
-Bonferroni = array2table(logical(Bonferroni), 'VariableNames',["Student's t", "Kolmogorov-Smirnov", "Permutation"]);
-Sidak = array2table(logical(Sidak), 'VariableNames',["Student's t", "Kolmogorov-Smirnov", "Permutation"]);
-FDR = array2table(logical(FDR), 'VariableNames',["Student's t", "Kolmogorov-Smirnov", "Permutation"]);
+Bonferroni = array2table(logical(Bonferroni), 'VariableNames',["Student's t", "Kolmogorov-Smirnov", "Permutation"], 'RowNames',entropy.Properties.VariableNames(1:N.IC));
+Sidak = array2table(logical(Sidak), 'VariableNames',["Student's t", "Kolmogorov-Smirnov", "Permutation"], 'RowNames',entropy.Properties.VariableNames(1:N.IC));
+FDR = array2table(logical(FDR), 'VariableNames',["Student's t", "Kolmogorov-Smirnov", "Permutation"], 'RowNames',entropy.Properties.VariableNames(1:N.IC));
 
 % Find indices of significantly different entropies
 if nnz(FDR{:,"Student's t"}) > 0
@@ -518,6 +518,7 @@ end
 disp(strjoin(["Student's two-sample t-test detects", num2str(nnz(FDR{:,"Student's t"})), "significant ICs"], " "));
 disp(strjoin(["Kolmogorov-Smirnov two-tailed test detects", num2str(nnz(FDR{:,"Kolmogorov-Smirnov"})), "significant ICs"], " "));
 disp(strjoin(["Difference-of-means permutation test detects", num2str(nnz(FDR{:,"Permutation"})), "significant ICs"], " "));
+
 
 %% Compile tables: entropy means, standard deviations
 
