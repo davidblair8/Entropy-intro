@@ -363,30 +363,16 @@ clear c
 
 % extract components & activities from dFNC
 [whitesig, dewhiteM] = icatb_calculate_pca(FNC.full, N.IC);     % ICA runs along the first (column) dimension.
-[~, ~, A, sources.Full] = icatb_icaAlgorithm(1, whitesig');     %   for spatial ICA, orient data as space x time
+[~, ~, A, sources] = icatb_icaAlgorithm(1, whitesig');     %   for spatial ICA, orient data as space x time
 A = dewhiteM*A;                                                 %   for temporal ICA, orient data as time x space
 W = pinv(A);
 
 % Set concatenated time series structure
-sources.Full = sources.Full';
-
-% Generate and vectorize square matrix within-domain and between-domain maps
-mask.Within = logical(ind.FND{:,:}*ind.FND{:,:}');
-mask.Within = icatb_mat2vec(mask.Within);
-mask.Between = ~mask.Within;
-mask.Full = mask.Within+mask.Between;
-
-% Map time series to within- and between-domain maps
-FNC.Within = FNC.full.*repmat(mask.Within', [N.TR*sum(N.subjects{:,:}), 1]);
-FNC.Between = FNC.full.*repmat(mask.Between', [N.TR*sum(N.subjects{:,:}), 1]);
-
-% Map time series to within- and between-domain maps
-sources.Within = W*FNC.Within'; sources.Within = sources.Within';
-sources.Between = W*FNC.Between'; sources.Between = sources.Between';
+sources = sources';
 
 % Set colorbar, y-limits
-limits.color = max(abs(W),[],'all');        % A = mixing matrix; W = unmixing matrix
-limits.y = max(abs(sources.Full),[],'all');   % ts.sources.full = component time courses
+lim.color = max(abs(W),[],'all');        % A = mixing matrix; W = unmixing matrix
+lim.y = max(abs(sources),[],'all');   % ts.sources.full = component time courses
 
 % Select sample connectivity maps
 N.samplot = min([5, N.IC]);
@@ -394,235 +380,236 @@ C = nchoosek(1:N.IC, N.samplot);
 C = C(ceil(rand*size(C,1)),:);
 
 
-%% Loop through all, within-domain, between-domain analyses
-
-S = string(fieldnames(sources));
-T = strcat(S, repmat("-Domain", [size(S,1) 1]));
-for n = 1:numel(S)
-
-    % %% Remove site means from ICA components
-    % 
-    % F(N.fig) = figure; F(N.fig).Position = get(0,'screensize');
-    % N.fig = N.fig + 1;
-    % for k = 1:N.samplot
-    %     % Plot ICA source matrices
-    %     ax(k,1) = subplot(3, N.samplot, k);
-    %     imagesc(icatb_vec2mat(W(C(k),:))); colormap jet; clim([-limits.color limits.color]);
-    %     pbaspect([1 1 1]); colorbar; hold on
-    %     ylabel('Functional Networks'); xlabel('Functional Networks');
-    %     title(strjoin(["FNC of Component", num2str(C(k))]), 'FontSize',16);
-    % 
-    %     % Plot sample ICA time series pre-correction
-    %     ax(k,2) = subplot(3, N.samplot, N.samplot+k);
-    %     plot(1:N.TR*max(N.subjects{:,:}), ts.sources.ic{C(k)}); hold on
-    %     title({"Uncorrected Time Course of", strjoin(["Component", num2str(C(k))], " ")}, 'FontSize',16);
-    %     set(ax(k,2), {'XTick', 'XTickLabels', 'XLim', 'YLim'}, {0:N.TR:max(N.subjects{:,:})*N.TR, [], [0 max(N.subjects{:,:})*N.TR], [-limits.y limits.y]});
-    %     legend(labels.diagnosis);
-    %     ylabel("Activity");
-    %     xlabel("Subjects");
-    % end
-    % 
-    % % Remove site means from ICA components
-    % sitemean = nan(numel(ind.site), N.IC);
-    % sm = sources.(S(n));
-    % for k = 1:numel(ind.site)
-    %     sitemean(k,:) = mean(sources.(S(n))(I.FNC.concat{:,"Site"}==ind.site(k),:), 1,'omitnan');
-    %     sm(I.FNC.concat{:,"Site"}==ind.site(k),:) = sm(I.FNC.concat{:,"Site"}==ind.site(k),:) - repmat(sitemean(k,:), [nnz(I.FNC.concat{:,"Site"}==ind.site(k)) 1]);
-    % end
-    % 
-    % % Recollate time series by IC
-    % for k = 1:N.IC
-    %     for c = 1:N.conditions
-    %         ts.sources.ic{k}(c,1:N.TR*N.subjects{:,labels.diagnosis(c)}) = sm(strcmpi(I.FNC.concat{:,"Diagnosis"},labels.diagnosis(c)),k)';
-    %     end
-    % end
-    % 
-    % % Recollate time series by subject
-    % for c = 1:N.conditions
-    %     for s = 1:N.subjects{:,c}
-    %         ts.sources.subj{s,c} = sm(strcmpi(I.FNC.concat{:,"Diagnosis"},labels.diagnosis(c)) & I.FNC.concat{:,"Subject"}==ind.subject(s,c), :);
-    %     end
-    % end
-    % 
-    % % Plot ICA time series post-correction
-    % for k = 1:N.samplot
-    %     ax(k,3) = subplot(3, N.samplot, (2*N.samplot)+k);
-    %     plot(1:N.TR*max(N.subjects{:,:}), ts.sources.ic{C(k)}); hold on
-    %     title({"Corrected Time Course of", strjoin(["Component", num2str(C(k))], " ")}, 'FontSize',16);
-    %     set(ax(k,3), {'XTick', 'XTickLabels', 'XLim', 'YLim'}, {0:N.TR:max(N.subjects{:,:})*N.TR, [], [0 max(N.subjects{:,:})*N.TR], [-limits.y limits.y]});
-    %     legend(labels.diagnosis);
-    %     ylabel("Activity");
-    %     xlabel("Subjects");
-    % end
-    
-    
-    %% Calculate subject-level entropy & joint entropy
-    
-    % Find component entropies
-    entropy.(S(n)) = nan(sum(N.subjects{:,:}), N.IC+1);
-    E = string(1:N.IC+1);
-    
-    for s = 1:sum(N.subjects{:,:})
-        si = str2double(analysis_data.Properties.RowNames{s});
-        ts = sources.(S(n))(strcmpi(labels.diagnosis(c), I{:,"diagnosis"}) & I{:,"subject"}==si, :);
-        for k = 1:N.IC
-            entropy.(S(n))(s, k) = HShannon_kNN_k_estimation(ts(:,k)', co);
-            E(k) = strcat(["Comp",E(k)]);
-        end
-    end
-    clear s ts k si
-
-    % Joint entropies
-    entropy.(S(n)){:,N.IC+1} = squeeze(sum(entropy.(S(n)){:,2}, 1:N.IC));
-    E(N.IC+1) = "Joint";
-    
-    % Convert entropy to table
-    entropy.(S(n)) = array2table(entropy.(S(n)), "RowNames",analysis_data.Properties.RowNames, "VariableNames",E);
-    
-    
-    %% Test for group-level changes
-    
-    % joint entropy
-    [h.joint.(S(n)), p.joint.(S(n))] = sigtest(e.joint.(S(n)));
-    if isfield(h.joint.(S(n)), 't') && h.joint.(S(n)){:,'t'}
-        disp(strjoin(["Student's two-sample t-test shows significant difference between patient and control joint entropy (p = .", num2str(p.joint.(S(n)).t), ")."], " "));
-    end
-    if h.joint.(S(n)).ks
-        disp(strjoin(["Kolmogorov-Smirnov two-tailed test shows significant difference between patient and control joint entropy (p = .", num2str(p.joint.(S(n)).ks), ")."], " "));
-    end
-    if h.joint.(S(n)).perm
-        disp(strjoin(["Difference-of-means permutation test shows significant difference between patient and control joint entropy (p = .", num2str(p.joint.(S(n)).perm), ")."], " "));
-    end
-    
-    % component entropy
-    p.comp.(S(n)) = table('Size',[N.IC,3], 'VariableTypes',{'double','double','double'},'VariableNames',["t" "ks" "perm"]);
-    h.comp.(S(n)) = table('Size',[N.IC,3], 'VariableTypes',{'logical','logical','logical'},'VariableNames',["t" "ks" "perm"]);
-    for c = 1:N.IC
-        [h.comp.(S(n))(c,:), p.comp.(S(n))(c,:)] = sigtest(squeeze(e.comp.(S(n))(c,:,:)));
-    end
-    
-    % multiple-comparison correction
-    FDR.(S(n)) = nan(N.IC,2);
-    Bonferroni.(S(n)) = FDR.(S(n));
-    Sidak.(S(n)) = FDR.(S(n));
-    [FDR.(S(n))(:,1), Bonferroni.(S(n))(:,1), Sidak.(S(n))(:,1)] = mCompCorr(N.IC, p.comp.(S(n)){:,"t"}, 0.05);
-    [FDR.(S(n))(:,2), Bonferroni.(S(n))(:,2), Sidak.(S(n))(:,2)] = mCompCorr(N.IC, p.comp.(S(n)){:,"ks"}, 0.05);
-    [FDR.(S(n))(:,3), Bonferroni.(S(n))(:,3), Sidak.(S(n))(:,3)] = mCompCorr(N.IC, p.comp.(S(n)){:,"perm"}, 0.05);
-
-    % convert NaNs to false
-    FDR.(S(n))(isnan(FDR.(S(n)))) = false;
-    Bonferroni.(S(n))(isnan(Bonferroni.(S(n)))) = false;
-    Sidak.(S(n))(isnan(Sidak.(S(n)))) = false;
-    
-    % convert to logical arrays
-    Bonferroni.(S(n)) = array2table(logical(Bonferroni.(S(n))), 'VariableNames',["Student's t", "Kolmogorov-Smirnov", "Permutation"]);
-    Sidak.(S(n)) = array2table(logical(Sidak.(S(n))), 'VariableNames',["Student's t", "Kolmogorov-Smirnov", "Permutation"]);
-    FDR.(S(n)) = array2table(logical(FDR.(S(n))), 'VariableNames',["Student's t", "Kolmogorov-Smirnov", "Permutation"]);
-    
-    % Find indices of significantly different entropies
-    if nnz(FDR.(S(n)){:,"Student's t"}) > 0
-        ind.e.(S(n)) = find(FDR.(S(n)){:,"Student's t"});
-    elseif nnz(FDR.(S(n)){:,"Permutation"}) > 0
-        ind.e.(S(n)) = find(FDR.(S(n)){:,"Permutation"});
-    else
-        ind.e.(S(n)) = find(FDR.(S(n)){:,"Kolmogorov-Smirnov"});
-    end
-    
-    % Display number of significant differences detected
-    disp(strjoin(["Student's two-sample t-test detects", num2str(nnz(FDR.(S(n)){:,"Student's t"})), "significant ICs"], " "));
-    disp(strjoin(["Kolmogorov-Smirnov two-tailed test detects", num2str(nnz(FDR.(S(n)){:,"Kolmogorov-Smirnov"})), "significant ICs"], " "));
-    disp(strjoin(["Difference-of-means permutation test detects", num2str(nnz(FDR.(S(n)){:,"Permutation"})), "significant ICs"], " "));
-    
-    % Compile tables: entropy means, standard deviations
-    estats.joint.(S(n)).mean = mean(e.joint.(S(n)),'omitnan');
-    estats.joint.(S(n)).mean = array2table(estats.joint.(S(n)).mean, 'VariableNames',labels.diagnosis);
-    estats.comp.(S(n)).mean = squeeze(mean(e.comp.(S(n)),2,'omitnan'));
-    estats.comp.(S(n)).mean = array2table(estats.comp.(S(n)).mean, 'VariableNames',labels.diagnosis);
-    estats.joint.(S(n)).std = std(e.joint.(S(n)),0,'omitnan');
-    estats.joint.(S(n)).std = array2table(estats.joint.(S(n)).std, 'VariableNames',labels.diagnosis);
-    estats.comp.(S(n)).std = squeeze(std(e.comp.(S(n)),0,2,'omitnan'));
-    estats.comp.(S(n)).std = array2table(estats.comp.(S(n)).std, 'VariableNames',labels.diagnosis);
+%% Remove site means from ICA components
+% 
+% F(N.fig) = figure; F(N.fig).Position = get(0,'screensize');
+% N.fig = N.fig + 1;
+% for k = 1:N.samplot
+%     % Plot ICA source matrices
+%     ax(k,1) = subplot(3, N.samplot, k);
+%     imagesc(icatb_vec2mat(W(C(k),:))); colormap jet; clim([-limits.color limits.color]);
+%     pbaspect([1 1 1]); colorbar; hold on
+%     ylabel('Functional Networks'); xlabel('Functional Networks');
+%     title(strjoin(["FNC of Component", num2str(C(k))]), 'FontSize',16);
+% 
+%     % Plot sample ICA time series pre-correction
+%     ax(k,2) = subplot(3, N.samplot, N.samplot+k);
+%     plot(1:N.TR*max(N.subjects{:,:}), ts.sources.ic{C(k)}); hold on
+%     title({"Uncorrected Time Course of", strjoin(["Component", num2str(C(k))], " ")}, 'FontSize',16);
+%     set(ax(k,2), {'XTick', 'XTickLabels', 'XLim', 'YLim'}, {0:N.TR:max(N.subjects{:,:})*N.TR, [], [0 max(N.subjects{:,:})*N.TR], [-limits.y limits.y]});
+%     legend(labels.diagnosis);
+%     ylabel("Activity");
+%     xlabel("Subjects");
+% end
+% 
+% % Remove site means from ICA components
+% sitemean = nan(numel(ind.site), N.IC);
+% sm = sources;
+% for k = 1:numel(ind.site)
+%     sitemean(k,:) = mean(sources(I.FNC.concat{:,"Site"}==ind.site(k),:), 1,'omitnan');
+%     sm(I.FNC.concat{:,"Site"}==ind.site(k),:) = sm(I.FNC.concat{:,"Site"}==ind.site(k),:) - repmat(sitemean(k,:), [nnz(I.FNC.concat{:,"Site"}==ind.site(k)) 1]);
+% end
+% 
+% % Recollate time series by IC
+% for k = 1:N.IC
+%     for c = 1:N.conditions
+%         ts.sources.ic{k}(c,1:N.TR*N.subjects{:,labels.diagnosis(c)}) = sm(strcmpi(I.FNC.concat{:,"Diagnosis"},labels.diagnosis(c)),k)';
+%     end
+% end
+% 
+% % Recollate time series by subject
+% for c = 1:N.conditions
+%     for s = 1:N.subjects{:,c}
+%         ts.sources.subj{s,c} = sm(strcmpi(I.FNC.concat{:,"Diagnosis"},labels.diagnosis(c)) & I.FNC.concat{:,"Subject"}==ind.subject(s,c), :);
+%     end
+% end
+% 
+% % Plot ICA time series post-correction
+% for k = 1:N.samplot
+%     ax(k,3) = subplot(3, N.samplot, (2*N.samplot)+k);
+%     plot(1:N.TR*max(N.subjects{:,:}), ts.sources.ic{C(k)}); hold on
+%     title({"Corrected Time Course of", strjoin(["Component", num2str(C(k))], " ")}, 'FontSize',16);
+%     set(ax(k,3), {'XTick', 'XTickLabels', 'XLim', 'YLim'}, {0:N.TR:max(N.subjects{:,:})*N.TR, [], [0 max(N.subjects{:,:})*N.TR], [-limits.y limits.y]});
+%     legend(labels.diagnosis);
+%     ylabel("Activity");
+%     xlabel("Subjects");
+% end
 
 
-    %% Visualise components with group-level changes
-    
-    % Visualise joint entropy of both conditions
+%% Calculate subject-level entropy & joint entropy
+
+% Find component entropies
+entropy = nan(sum(N.subjects{:,:}), N.IC+1);
+E = strcat(repmat("Comp", [N.IC+1, 1]), string(1:N.IC+1)')';
+
+for s = 1:sum(N.subjects{:,:})
+    ts = sources(I{:,"subject"} == str2double(analysis_data.Properties.RowNames{s}), :);
+    for k = 1:N.IC
+        entropy(s, k) = HShannon_kNN_k_estimation(ts(:,k)', co);
+    end
+end
+clear s ts k si
+
+% Joint entropies
+entropy(:,N.IC+1) = squeeze(sum(entropy(:,1:N.IC), 2));
+E(N.IC+1) = "Joint";
+
+% Convert entropy to table
+entropy = array2table(entropy, "RowNames",analysis_data.Properties.RowNames, "VariableNames",E);
+
+
+%% Test for group-level changes
+
+% joint entropy
+E = nan(max(N.subjects{:,:}), N.conditions);
+for c = 1:N.conditions
+    E(1:N.subjects{:,labels.diagnosis(c)},c) = entropy{strcmpi(analysis_data{:,"Diagnosis"}, labels.diagnosis(c)), "Joint"};
+end
+[h.joint, p.joint] = sigtest(E);
+if isfield(h.joint, 't') && h.joint{:,'t'}
+    disp(strjoin(["Student's two-sample t-test shows significant difference between patient and control joint entropy (p = .", num2str(p.joint.t), ")."], " "));
+end
+if h.joint.ks
+    disp(strjoin(["Kolmogorov-Smirnov two-tailed test shows significant difference between patient and control joint entropy (p = .", num2str(p.joint.ks), ")."], " "));
+end
+if h.joint.perm
+    disp(strjoin(["Difference-of-means permutation test shows significant difference between patient and control joint entropy (p = .", num2str(p.joint.perm), ")."], " "));
+end
+
+% component entropy
+p.comp = table('Size',[N.IC,3], 'VariableTypes',{'double','double','double'},'VariableNames',["t" "ks" "perm"]);
+h.comp = table('Size',[N.IC,3], 'VariableTypes',{'logical','logical','logical'},'VariableNames',["t" "ks" "perm"]);
+for c = 1:N.IC
+    for k = 1:N.conditions
+        E(1:N.subjects{:,labels.diagnosis(k)},k) = entropy{strcmpi(analysis_data{:,"Diagnosis"}, labels.diagnosis(k)), strcat("Comp",num2str(c))};
+    end
+    [h.comp(c,:), p.comp(c,:)] = sigtest(E);
+end
+clear c k E
+
+% multiple-comparison correction
+FDR = nan(N.IC,2);
+Bonferroni = FDR;
+Sidak = FDR;
+[FDR(:,1), Bonferroni(:,1), Sidak(:,1)] = mCompCorr(N.IC, p.comp{:,"t"}, 0.05);
+[FDR(:,2), Bonferroni(:,2), Sidak(:,2)] = mCompCorr(N.IC, p.comp{:,"ks"}, 0.05);
+[FDR(:,3), Bonferroni(:,3), Sidak(:,3)] = mCompCorr(N.IC, p.comp{:,"perm"}, 0.05);
+
+% convert NaNs to false
+FDR(isnan(FDR)) = false;
+Bonferroni(isnan(Bonferroni)) = false;
+Sidak(isnan(Sidak)) = false;
+
+% convert to logical arrays
+Bonferroni = array2table(logical(Bonferroni), 'VariableNames',["Student's t", "Kolmogorov-Smirnov", "Permutation"]);
+Sidak = array2table(logical(Sidak), 'VariableNames',["Student's t", "Kolmogorov-Smirnov", "Permutation"]);
+FDR = array2table(logical(FDR), 'VariableNames',["Student's t", "Kolmogorov-Smirnov", "Permutation"]);
+
+% Find indices of significantly different entropies
+if nnz(FDR{:,"Student's t"}) > 0
+    ind.e = find(FDR{:,"Student's t"});
+elseif nnz(FDR{:,"Permutation"}) > 0
+    ind.e = find(FDR{:,"Permutation"});
+else
+    ind.e = find(FDR{:,"Kolmogorov-Smirnov"});
+end
+
+% Display number of significant differences detected
+disp(strjoin(["Student's two-sample t-test detects", num2str(nnz(FDR{:,"Student's t"})), "significant ICs"], " "));
+disp(strjoin(["Kolmogorov-Smirnov two-tailed test detects", num2str(nnz(FDR{:,"Kolmogorov-Smirnov"})), "significant ICs"], " "));
+disp(strjoin(["Difference-of-means permutation test detects", num2str(nnz(FDR{:,"Permutation"})), "significant ICs"], " "));
+
+%% Compile tables: entropy means, standard deviations
+
+% estats.joint.mean = mean(entropy{:,"Joint"},'omitnan');
+% estats.joint.mean = array2table(estats.joint.mean, 'VariableNames',labels.diagnosis);
+% estats.comp.mean = squeeze(mean(e.comp,2,'omitnan'));
+% estats.comp.mean = array2table(estats.comp.mean, 'VariableNames',labels.diagnosis);
+% estats.joint.std = std(e.joint,0,'omitnan');
+% estats.joint.std = array2table(estats.joint.std, 'VariableNames',labels.diagnosis);
+% estats.comp.std = squeeze(std(e.comp,0,2,'omitnan'));
+% estats.comp.std = array2table(estats.comp.std, 'VariableNames',labels.diagnosis);
+
+
+%% Visualise components with group-level changes
+
+% Visualise joint entropy of both conditions
+F(N.fig) = figure; N.fig = N.fig + 1;
+F(N.fig-1).Position = get(0,'screensize'); hold on;
+boxplot(e.joint, labels.diagnosis, 'Notch','on');
+ylim([min(e.joint,[],'all','omitnan')-10, max(e.joint,[],'all')+10]);
+title(strcat([T(n), "Joint Entropy"]), 'FontSize',16); ylabel("Joint Entropy");
+if isfield(h.joint, "t") && h.joint{:,'t'}
+    axes = gca;
+    plot(1:2, [max(e.joint,[],'all','omitnan')+3, max(e.joint,[],'all','omitnan')+3], 'k-', 'LineWidth',1);
+    plot(1.5, max(e.joint,[],'all','omitnan')+5, 'k*', 'MarkerSize',10);
+elseif h.joint{:,'ks'}
+    axes = gca;
+    plot(1:2, [max(e.joint,[],'all','omitnan')+3, max(e.joint,[],'all','omitnan')+3], 'k-', 'LineWidth',1);
+    plot(1.5, max(e.joint,[],'all','omitnan')+5, 'k*', 'MarkerSize',10);
+end
+
+
+% Plot significantly differing ICs
+if isfield(ind, 'e')
     F(N.fig) = figure; N.fig = N.fig + 1;
-    F(N.fig-1).Position = get(0,'screensize'); hold on;
-    boxplot(e.joint.(S(n)), labels.diagnosis, 'Notch','on');
-    ylim([min(e.joint.(S(n)),[],'all','omitnan')-10, max(e.joint.(S(n)),[],'all')+10]);
-    title(strcat([T(n), "Joint Entropy"]), 'FontSize',16); ylabel("Joint Entropy");
-    if isfield(h.joint.(S(n)), "t") && h.joint.(S(n)){:,'t'}
-        axes = gca;
-        plot(1:2, [max(e.joint.(S(n)),[],'all','omitnan')+3, max(e.joint.(S(n)),[],'all','omitnan')+3], 'k-', 'LineWidth',1);
-        plot(1.5, max(e.joint.(S(n)),[],'all','omitnan')+5, 'k*', 'MarkerSize',10);
-    elseif h.joint.(S(n)){:,'ks'}
-        axes = gca;
-        plot(1:2, [max(e.joint.(S(n)),[],'all','omitnan')+3, max(e.joint.(S(n)),[],'all','omitnan')+3], 'k-', 'LineWidth',1);
-        plot(1.5, max(e.joint.(S(n)),[],'all','omitnan')+5, 'k*', 'MarkerSize',10);
+    F(N.fig-1).Position = get(0,'screensize');
+    for j = 1:numel(ind.e)
+        % Plot ICA source matrices
+        ax(j,1) = subplot(3, numel(ind.e), j);
+        imagesc(icatb_vec2mat(W(ind.e(j),:).*mask')); colormap jet; clim([-lim.color lim.color]);
+        pbaspect([1 1 1]); colorbar; hold on
+        ylabel('Functional Networks'); xlabel('Functional Networks');
+        title(strjoin([T(n), "FNC of Component", num2str(ind.e(j))]), 'FontSize',16);
+        set(ax(j,1), {'XLim','YLim','XTick','YTick'}, {[0.5 N.ROI+0.5], [0.6 N.ROI+0.5], [], []}); hold on;
+
+        % Plot time series
+        ax(j,2) = subplot(3, numel(ind.e), j+numel(ind.e)); hold on
+        plot(1:N.TR*max(N.subjects{:,:}), ts.sources.ic{ind.e(j)}); hold on
+        title({strjoin([T(n), "Time Course of "]), strjoin(["Component", num2str(ind.e(j))], " ")}, 'FontSize',16);
+        set(ax(j,2), {'XTick', 'XTickLabels', 'XLim', 'YLim'}, {0:N.TR:max(N.subjects{:,:})*N.TR, [], [0 max(N.subjects{:,:})*N.TR], [-lim.y lim.y]});
+        legend(labels.diagnosis);
+        ylabel("Activity");
+        xlabel("Subjects");
+
+        % Plot entropies
+        ax(j,3) = subplot(3, numel(ind.e), j+(2*numel(ind.e))); hold on
+        boxplot(squeeze(e.comp(ind.e(j),:,:)), labels.diagnosis, 'Notch','on');
+        ylim([min(e.comp(ind.e(j),:,:),[],'all')-2, max(e.comp(ind.e(j),:,:),[],'all','omitnan')+2]);
+        title({strjoin([T(n), "Group Entropies of"]), strjoin(["Component", num2str(ind.e(j))], " ")}, 'FontSize',16);
+        ylabel("Shannon Entropy");
+        plot(1:2, [max(e.comp(ind.e(j),:,:),[],'all','omitnan')+0.5, max(e.comp(ind.e(j),:,:),[],'all','omitnan')+0.5], 'k-', 'LineWidth',1);
+        plot(1.5, max(e.comp(ind.e(j),:,:),[],'all','omitnan')+1, 'k*', 'MarkerSize',10);
     end
-    
-    
-    % Plot significantly differing ICs
-    if isfield(ind, 'e')
-        F(N.fig) = figure; N.fig = N.fig + 1;
-        F(N.fig-1).Position = get(0,'screensize');
-        for j = 1:numel(ind.e.(S(n)))
-            % Plot ICA source matrices
-	        ax(j,1) = subplot(3, numel(ind.e.(S(n))), j);
-            imagesc(icatb_vec2mat(W(ind.e.(S(n))(j),:).*mask.(S(n))')); colormap jet; clim([-limits.color limits.color]);
-            pbaspect([1 1 1]); colorbar; hold on
-            ylabel('Functional Networks'); xlabel('Functional Networks');
-            title(strjoin([T(n), "FNC of Component", num2str(ind.e.(S(n))(j))]), 'FontSize',16);
-            set(ax(j,1), {'XLim','YLim','XTick','YTick'}, {[0.5 N.ROI+0.5], [0.6 N.ROI+0.5], [], []}); hold on;
-    
-            % Plot time series
-	        ax(j,2) = subplot(3, numel(ind.e.(S(n))), j+numel(ind.e.(S(n)))); hold on
-            plot(1:N.TR*max(N.subjects{:,:}), ts.sources.ic{ind.e.(S(n))(j)}); hold on
-            title({strjoin([T(n), "Time Course of "]), strjoin(["Component", num2str(ind.e.(S(n))(j))], " ")}, 'FontSize',16);
-            set(ax(j,2), {'XTick', 'XTickLabels', 'XLim', 'YLim'}, {0:N.TR:max(N.subjects{:,:})*N.TR, [], [0 max(N.subjects{:,:})*N.TR], [-limits.y limits.y]});
-            legend(labels.diagnosis);
-            ylabel("Activity");
-            xlabel("Subjects");
-    
-            % Plot entropies
-	        ax(j,3) = subplot(3, numel(ind.e.(S(n))), j+(2*numel(ind.e.(S(n))))); hold on
-	        boxplot(squeeze(e.comp.(S(n))(ind.e.(S(n))(j),:,:)), labels.diagnosis, 'Notch','on');
-	        ylim([min(e.comp.(S(n))(ind.e.(S(n))(j),:,:),[],'all')-2, max(e.comp.(S(n))(ind.e.(S(n))(j),:,:),[],'all','omitnan')+2]);
-	        title({strjoin([T(n), "Group Entropies of"]), strjoin(["Component", num2str(ind.e.(S(n))(j))], " ")}, 'FontSize',16);
-	        ylabel("Shannon Entropy");
-	        plot(1:2, [max(e.comp.(S(n))(ind.e.(S(n))(j),:,:),[],'all','omitnan')+0.5, max(e.comp.(S(n))(ind.e.(S(n))(j),:,:),[],'all','omitnan')+0.5], 'k-', 'LineWidth',1);
-	        plot(1.5, max(e.comp.(S(n))(ind.e.(S(n))(j),:,:),[],'all','omitnan')+1, 'k*', 'MarkerSize',10);
-        end
-    end
+end
 
 
-    %% Regress clinical variables against entropy
+%% Regress clinical variables against entropy
 
-    % Format clinical variables
+% Format clinical variables
 
-    % Set up multiple linear regression
-    e.joint;
-    e.comp;
-    I.sources.subj;
-    [b, stats] = robustfit();
-    [b,bint, r,rint, stats] = regress();
+% Set up multiple linear regression
+e.joint;
+e.comp;
+I.sources.subj;
+[b, stats] = robustfit();
+[b,bint, r,rint, stats] = regress();
 
 
 % %% Correlate entropy score against clinical variables
 % 
 % % Collate matrix (table) of joint entropy scores & component entropeis
-% edata = nan(nnz(isfinite(e.joint.(S(n)))), size(e.comp.(S(n)),1)+1);      % set table
+% edata = nan(nnz(isfinite(e.joint)), size(e.comp,1)+1);      % set table
 % for j = 1:N.conditions
-%     edata() =  e.joint.(S(n))();
-% edata(~I{:,'SZ'},1) = e.joint.(S(n))(1:nnz(~I{:,'SZ'}), 1);        % select healthy controls
-% edata(I{:,'SZ'},1) = e.joint.(S(n))(1:nnz(I{:,'SZ'}), 2);          % select patients
+%     edata() =  e.joint();
+% edata(~I{:,'SZ'},1) = e.joint(1:nnz(~I{:,'SZ'}), 1);        % select healthy controls
+% edata(I{:,'SZ'},1) = e.joint(1:nnz(I{:,'SZ'}), 2);          % select patients
 % end
-% for i = 2:size(e.comp.(S(n)),1)+1
-%     edata(~I{:,'SZ'},i) = e.comp.(S(n))(i-1, 1:nnz(~I{:,'SZ'}), 1);
-%     edata(I{:,'SZ'},i) = e.comp.(S(n))(i-1, 1:nnz(I{:,'SZ'}), 2);
+% for i = 2:size(e.comp,1)+1
+%     edata(~I{:,'SZ'},i) = e.comp(i-1, 1:nnz(~I{:,'SZ'}), 1);
+%     edata(I{:,'SZ'},i) = e.comp(i-1, 1:nnz(I{:,'SZ'}), 2);
 % end
-% edata = array2table(edata, 'VariableNames',["joint"; strcat(repmat("Component ",[N.IC 1]), string(1:size(e.comp.(S(n)),1))')], 'RowNames',analysis_data.Properties.RowNames);
+% edata = array2table(edata, 'VariableNames',["joint"; strcat(repmat("Component ",[N.IC 1]), string(1:size(e.comp,1))')], 'RowNames',analysis_data.Properties.RowNames);
 % clear i
 % 
 % % numerize clinical information
@@ -638,7 +625,7 @@ for n = 1:numel(S)
 % % Correct p-values for multiple comparison (family-wise error)
 % p_bin = zeros(numel(p.corr), 1);
 % for s = 1:length(p_bin)
-% 	p_bin(sort(FDR.(S(n))_benjHoch(reshape(p.corr, [numel(p.corr),1]), 0.05)), 1) = 1;
+% 	p_bin(sort(FDR_benjHoch(reshape(p.corr, [numel(p.corr),1]), 0.05)), 1) = 1;
 % end; clear s
 % p_bin = logical(squeeze(p_bin));
 % p_bin = reshape(p_bin, size(p.corr));
@@ -650,7 +637,7 @@ for n = 1:numel(S)
 % % Plot correlation values (matrix)
 % F(N.fig) = figure; N.fig = N.fig+1;
 % F(N.fig-1).Position = get(0,'screensize');
-% l = numel(ind.e.(S(n)));
+% l = numel(ind.e);
 % ax(l+1,1) = subplot(2,1,1);
 % imagesc(rho); colormap jet;
 % clim([-max(abs(rho),[],'all'), max(abs(rho),[],'all')]); colorbar; hold on;
@@ -704,8 +691,8 @@ for n = 1:numel(S)
 % % Ax = gca;
 % % xt = Ax.XTick';
 % % xtv = compose('%.0f',xt)';
-% % xt = xt(ind.e.(S(n)));
-% % xtv = xtv(ind.e.(S(n)));
+% % xt = xt(ind.e);
+% % xtv = xtv(ind.e);
 % % text(xt,zeros(size(xt)), xtv, 'Color','r', 'Horiz','center', 'Vert','top')
 % 
 % % Get signficant correlation coefficients & variables
@@ -717,8 +704,6 @@ for n = 1:numel(S)
 % corrvals = num2cell(corrvals);
 % corrvals(:,1) = analysis_data.Properties.VariableNames(cell2mat(corrvals(:,1)));
 % corrvals = cell2table(corrvals, 'VariableNames',["Variable", "Component", "rho", "p"]);
-
-end
 clear n sm s c k j
 
 
