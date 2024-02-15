@@ -187,7 +187,7 @@ N.IC = 8;
 %% Define filename based on parameters
 
 % Get number of ICs
-fileName = fullfile("Domains", strcat(num2str(N.IC), "ICs"));
+fileName = fullfile("Regression", strcat(num2str(N.IC), "ICs"));
 
 % Set iteration number
 fList = dir(fullfile(path{4}, strcat(strjoin([fileName, "iteration"], '-'), '*.mat')));	% Get file list
@@ -254,6 +254,9 @@ for c = 1:N.conditions
     title(strjoin(["Mean FNC of", labels.diagnosis(c)]));
 end
 clear c
+
+
+%% Run network-based statistic
 
 % % Check if need NBS intercept term
 % if intercept == true
@@ -350,33 +353,30 @@ entropy = array2table(entropy, "RowNames",analysis_data.Properties.RowNames, "Va
 %% Regress clinical variables against entropy
 
 % Format regression variables
-X = analysis_data;
+X = analysis_data(:, ["Diagnosis" "age" "Gender"]);
 X = convertvars(X, labels.data, 'double');
 X{:,"Diagnosis"} = strcmpi(labels.diagnosis(1), analysis_data{:,"Diagnosis"});
 X{:,"Gender"} = strcmpi(labels.gender(1), analysis_data{:,"Gender"});
-X = renamevars(X, labels.data, ["diagnosis" "gender (1=M, 0=F)"]);
+X = renamevars(X, labels.data, ["Diagnosis" "Gender (1=M, 0=F)"]);
 
-% Run multiple linear regression on each component + joint entropy
-b = nan(size(X,2), N.IC+1);
-bint = nan(size(X,2), 2, N.IC+1);
-r = nan(sum(N.subjects{:,:}), N.IC+1);
-rint = nan(sum(N.subjects{:,:}), 2, N.IC+1);
-stats = nan(N.IC+1, 4);
-for c = 1:N.IC+1
-    [b(:,c),bint(:,:,c), r(:,c),rint(:,:,c), stats(c,:)] = regress(entropy{:,c}, table2array(X));
+% add site information
+S = zeros(sum(N.subjects{:,:}), numel(ind.site));
+for s = 1:numel(ind.site)
+    S(:,s) = analysis_data{:,"Site"} == ind.site(s);
 end
-stats = array2table(stats, "VariableNames",["R^2", "F-statistic", "F-statistic p-value", "error variance"], "RowNames",entropy.Properties.VariableNames);
-b = array2table(b, "VariableNames",entropy.Properties.VariableNames, "RowNames",analysis_data.Properties.VariableNames);
-r = array2table(r, "VariableNames",entropy.Properties.VariableNames, "RowNames",analysis_data.Properties.RowNames);
-clear c
+S = array2table(S, "VariableNames",strcat(repmat("Site", [numel(ind.site) 1]), num2str(ind.site)));
+X = horzcat(X,S);
 
-% fit multiple linear regression on each component + joint entropy
-a = nan(size(X,2)+1, N.IC+1);
+% fit linear model
+diagnosis = table('Size',[N.IC+1, 4], 'VariableTypes',repmat("double",[1 4]));
 for c = 1:N.IC+1
-    [a(:,c), sts(c)] = robustfit(table2array(X), entropy{:,c}, [], [], 'on');
+    x = horzcat(X, entropy(:,c));
+    mdl.(x.Properties.VariableNames{end}) = fitlm(x);
+    diagnosis(c,:) = mdl.(x.Properties.VariableNames{end}).Coefficients("Diagnosis",:);
 end
-a = array2table(a', "RowNames",entropy.Properties.VariableNames, "VariableNames",string(["constant", analysis_data.Properties.VariableNames]));
-sts = struct2table(sts, "RowNames",entropy.Properties.VariableNames);
+diagnosis.Properties.RowNames = entropy.Properties.VariableNames;
+diagnosis.Properties.VariableNames = mdl.(x.Properties.VariableNames{end}).Coefficients.Properties.VariableNames;
+clear c s x
 
 
 %% Test for group-level changes
@@ -391,56 +391,65 @@ for k = 1:N.conditions
 end
 
 % component entropy comparisons
-p = table('Size',[N.IC+1,3], 'VariableTypes',{'double','double','double'}, 'VariableNames',["t" "ks" "perm"], 'RowNames',entropy.Properties.VariableNames);
-h = table('Size',[N.IC+1,3], 'VariableTypes',{'logical','logical','logical'}, 'VariableNames',["t" "ks" "perm"], 'RowNames',entropy.Properties.VariableNames);
-for c = 1:N.IC
+p = table('Size',[N.IC+1,3], 'VariableTypes',{'double','double','double'}, 'VariableNames',["Student's t-test" "Kolmogorov-Smirnov" "Permutation"], 'RowNames',entropy.Properties.VariableNames);
+h = table('Size',[N.IC+1,3], 'VariableTypes',{'logical','logical','logical'}, 'VariableNames',["Student's t-test" "Kolmogorov-Smirnov" "Permutation"], 'RowNames',entropy.Properties.VariableNames);
+for c = 1:N.IC+1
     [h(c,:), p(c,:)] = sigtest(squeeze(E(:,:,c)));
 end
 
+% add regression results to p, h
+p = horzcat(diagnosis(:,'pValue'), p);
+p = renamevars(p, "pValue", "Regression");
+t = table(p{:,"Regression"} < 0.05, 'VariableNames',"regression");
+h = horzcat(t, h);
+clear t
+
+% display result of joint entropy comparisons
+if h{"Joint","Student's t-test"}
+    disp(strjoin(["Student's two-sample t-test shows significant difference between patient and control joint entropy (p = .", num2str(p{"Joint","Student's t-test"}), ")."], " "));
+end
+if h{"Joint",'Kolmogorov-Smirnov'}
+    disp(strjoin(["Kolmogorov-Smirnov two-tailed test shows significant difference between patient and control joint entropy (p = .", num2str(p{"Joint","Kolmogorov-Smirnov"}), ")."], " "));
+end
+if h{"Joint",'Permutation'}
+    disp(strjoin(["Difference-of-means permutation test shows significant difference between patient and control joint entropy (p = .", num2str(p{"Joint","Permutation"}), ")."], " "));
+end
+
 % multiple-comparison correction
-FDR = nan(N.IC,2);
-Bonferroni = FDR;
-Sidak = FDR;
-[FDR(:,1), Bonferroni(:,1), Sidak(:,1)] = mCompCorr(N.IC, p{1:N.IC,"t"}, 0.05);
-[FDR(:,2), Bonferroni(:,2), Sidak(:,2)] = mCompCorr(N.IC, p{1:N.IC,"ks"}, 0.05);
-[FDR(:,3), Bonferroni(:,3), Sidak(:,3)] = mCompCorr(N.IC, p{1:N.IC,"perm"}, 0.05);
+multcorr.FDR = table('Size',[N.IC+1,numel(p.Properties.VariableNames)], 'VariableTypes',repmat("double",[numel(p.Properties.VariableNames) 1]), ...
+    'VariableNames',p.Properties.VariableNames, 'RowNames',entropy.Properties.VariableNames);
+multcorr.Bonferroni = multcorr.FDR;
+multcorr.Sidak = multcorr.FDR;
+for t = 1:numel(p.Properties.VariableNames)
+    c = p.Properties.VariableNames(t);
+    [multcorr.FDR{:,c}, multcorr.Bonferroni{:,c}, multcorr.Sidak{:,c}] = mCompCorr(N.IC+1, p{:,c}, 0.05);
+end
+clear c k t
 
 % convert NaNs to false
-FDR(isnan(FDR)) = false;
-Bonferroni(isnan(Bonferroni)) = false;
-Sidak(isnan(Sidak)) = false;
+S = string(fieldnames(multcorr));
+for s = 1:numel(S)
+    c = logical(multcorr.(S(s)){:,:});
+    c(isnan(table2array(multcorr.(S(s))))) = false;
+    multcorr.(S(s)){:,:} = c;
+end
+clear c k t s
 
-% convert to logical arrays
-Bonferroni = array2table(logical(Bonferroni), 'VariableNames',["Student's t", "Kolmogorov-Smirnov", "Permutation"], 'RowNames',entropy.Properties.VariableNames(1:N.IC));
-Sidak = array2table(logical(Sidak), 'VariableNames',["Student's t", "Kolmogorov-Smirnov", "Permutation"], 'RowNames',entropy.Properties.VariableNames(1:N.IC));
-FDR = array2table(logical(FDR), 'VariableNames',["Student's t", "Kolmogorov-Smirnov", "Permutation"], 'RowNames',entropy.Properties.VariableNames(1:N.IC));
-
-% Find indices of significantly different entropies
-if nnz(FDR{:,"Student's t"}) > 0
-    ind.e = find(FDR{:,"Student's t"});
-elseif nnz(FDR{:,"Permutation"}) > 0
-    ind.e = find(FDR{:,"Permutation"});
+% Find indices of individual components with significantly different entropies
+i = contains(string(entropy.Properties.VariableNames), "Comp");
+if nnz(multcorr.FDR{i,"Student's t-test"}) > 0
+    ind.e = find(multcorr.FDR{i,"Student's t-test"});
+elseif nnz(multcorr.FDR{i,"Permutation"}) > 0
+    ind.e = find(multcorr.FDR{i,"Permutation"});
 else
-    ind.e = find(FDR{:,"Kolmogorov-Smirnov"});
+    ind.e = find(multcorr.FDR{i,"Kolmogorov-Smirnov"});
 end
 
 % Display number of significant differences detected
-disp(strjoin(["Student's two-sample t-test detects", num2str(nnz(FDR{:,"Student's t"})), "significant ICs"], " "));
-disp(strjoin(["Kolmogorov-Smirnov two-tailed test detects", num2str(nnz(FDR{:,"Kolmogorov-Smirnov"})), "significant ICs"], " "));
-disp(strjoin(["Difference-of-means permutation test detects", num2str(nnz(FDR{:,"Permutation"})), "significant ICs"], " "));
-
-% joint entropy comparisons
-[h("Joint",:), p("Joint",:)] = sigtest(squeeze(E(:,:,N.IC+1)));
-if h{"Joint",'t'}
-    disp(strjoin(["Student's two-sample t-test shows significant difference between patient and control joint entropy (p = .", num2str(p{"Joint",'t'}), ")."], " "));
-end
-if h{"Joint",'ks'}
-    disp(strjoin(["Kolmogorov-Smirnov two-tailed test shows significant difference between patient and control joint entropy (p = .", num2str(p{"Joint",'ks'}), ")."], " "));
-end
-if h{"Joint",'perm'}
-    disp(strjoin(["Difference-of-means permutation test shows significant difference between patient and control joint entropy (p = .", num2str(p{"Joint",'perm'}), ")."], " "));
-end
-clear c k
+disp(strjoin(["Student's two-sample t-test detects", num2str(nnz(multcorr.FDR{i,"Student's t-test"})), "significant ICs"], " "));
+disp(strjoin(["Kolmogorov-Smirnov two-tailed test detects", num2str(nnz(multcorr.FDR{i,"Kolmogorov-Smirnov"})), "significant ICs"], " "));
+disp(strjoin(["Difference-of-means permutation test detects", num2str(nnz(multcorr.FDR{i,"Permutation"})), "significant ICs"], " "));
+clear i
 
 
 %% Compile tables: entropy means, standard deviations
