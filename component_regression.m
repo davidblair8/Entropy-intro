@@ -472,11 +472,11 @@ F(N.fig-1).Position = get(0,'screensize'); hold on;
 boxplot(squeeze(E(:,:,N.IC+1)), labels.diagnosis, 'Notch','on');
 ylim([min(squeeze(E(:,:,N.IC+1)),[],'all',"omitmissing")-10, max(squeeze(E(:,:,N.IC+1)),[],'all',"omitmissing")+10]);
 title("Joint Entropy", 'FontSize',16); ylabel("Joint Entropy");
-if h{"Joint",'t'}
+if h{"Joint",'Student''s t-test'}
     axes = gca;
     plot(1:2, [max(squeeze(E(:,:,N.IC+1)),[],'all','omitnan')+3, max(squeeze(E(:,:,N.IC+1)),[],'all','omitnan')+3], 'k-', 'LineWidth',1);
     plot(1.5, max(squeeze(E(:,:,N.IC+1)),[],'all','omitnan')+5, 'k*', 'MarkerSize',10);
-elseif h{"Joint",'ks'}
+elseif h{"Joint",'Kolmogorov-Smirnov'}
     axes = gca;
     plot(1:2, [max(squeeze(E(:,:,N.IC+1)),[],'all','omitnan')+3, max(squeeze(E(:,:,N.IC+1)),[],'all','omitnan')+3], 'k-', 'LineWidth',1);
     plot(1.5, max(squeeze(E(:,:,N.IC+1)),[],'all','omitnan')+5, 'k*', 'MarkerSize',10);
