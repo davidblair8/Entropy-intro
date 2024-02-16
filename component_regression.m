@@ -18,7 +18,7 @@ path{1,1} = strjoin(path{1}(1:end-1),'/');
 
 % Set data-specific subdirectories
 path{3,1} = fullfile(path{2}, 'Data');
-path{4,1} = fullfile(path{2}, 'Results');
+path{4,1} = fullfile(path{2}, 'Results','Regression');
 
 % Add relevant paths
 fpath{1,1} = fullfile(path{1}, 'MATLAB','spm12');
@@ -39,12 +39,17 @@ clear fpath k
 
 % Load formatted dFNC data
 load(fullfile(path{3}, 'FBIRN_DFNC_table.mat'));
+load(fullfile(path{3}, 'head_motion_meanFD.mat'));
 
 % Confirm that IDs, data are properly indexed
 assert(all(str2double(string(cell2mat(analysis_ID))) == str2double(analysis_data.Properties.RowNames)), "Data labels are not properly ordered!");
 clear analysis_ID analysis_SCORE
 assert(all(strcmpi(string(FILE_ID), string(analysis_data.Properties.VariableNames))), "Clinical variables are not properly ordered!");
 clear FILE_ID
+
+% add head motion to data array
+analysis_data = [table(head_motion_meanFD, 'VariableNames',"Mean Head Motion"), analysis_data];
+clear head_motion_meanFD
 
 % % Sort data by site
 % [~, I(:,1)] = sort(analysis_data{:,"Site"});
@@ -108,6 +113,9 @@ tstat = 3:0.5:5;
 
 %% Convert table variables (should be placed in separate script)
 
+% Replace numeric missing data code with NaN
+analysis_data{:,:}(analysis_data{:,:} == -9999) = NaN;
+
 % Identify table variables to change
 i(1,:) = contains(analysis_data.Properties.VariableNames, 'diagnosis');
 i(2,:) = contains(analysis_data.Properties.VariableNames, 'gender');
@@ -125,10 +133,7 @@ analysis_data{:,i(2,:)} = gender;
 clear groups gender i
 
 % Rename table variables
-analysis_data = renamevars(analysis_data, ["diagnosis(1:sz; 2:hc)","gender(1:male; 2:female)"], ["Diagnosis","Gender"]);
-
-% Replace numeric missing data code with NaN
-analysis_data{:,5:end}(analysis_data{:,5:end} == -9999) = NaN;
+analysis_data = renamevars(analysis_data, ["age" "diagnosis(1:sz; 2:hc)" "gender(1:male; 2:female)"], ["Age" "Diagnosis" "Gender"]);
 
 
 %% Set region labels & maps
@@ -168,11 +173,39 @@ ind.FND = array2table(ind.FND, 'RowNames',labels.ROI.Properties.RowNames, 'Varia
 clear d i r
 
 
+%% Concatenate and index time series
+
+% rename FNC data
+FNC.subj = DFNC_FBIRN;
+FNC.full = cell2mat(DFNC_FBIRN);
+
+% convert variables to row form
+I.subject = str2double(string(analysis_data.Properties.RowNames)');
+I.diagnosis = analysis_data{:,"Diagnosis"}';
+I.gender = analysis_data{:,"Gender"}';
+I.site = analysis_data{:,"Site"}';
+I.age = analysis_data{:,"Age"}';
+
+% fill in data for each timepoint
+f = fieldnames(I);
+for j = 1:numel(f)
+    I.(f{j}) = repmat(I.(f{j}), [N.TR 1]);
+    I.(f{j}) = reshape(I.(f{j}), [sum(N.subjects{:,:})*N.TR 1]);    % reshape indices to column form
+end
+clear j f k
+
+% Confirm that indices are in proper order
+assert(all(unique(I.subject)==str2double(string(analysis_data.Properties.RowNames))), "Indices are out of order!");
+
+% convert index to table
+I = struct2table(I);
+
+
 %% Set number of ICs
 
 % % Find maximum number of components
 % disp("Identifying number independent components from Marcenko-Pasteur distribution.");
-% N.IC = NumberofIC(ts);
+% N.IC = NumberofIC(FNC.full);
 
 % % Evaluate IC counts vs. captured variance
 % d = factor(N.IC);
@@ -201,34 +234,6 @@ nIter = numel(fList)-sum(a)+1;
 fileName = strjoin([fileName, strcat("iteration", num2str(nIter))], '_');
 clear fList nIter a
 clear a k n
-
-
-%% Concatenate and index time series
-
-% rename FNC data
-FNC.subj = DFNC_FBIRN;
-FNC.full = cell2mat(DFNC_FBIRN);
-
-% convert variables to row form
-I.subject = str2double(string(analysis_data.Properties.RowNames)');
-I.diagnosis = analysis_data{:,"Diagnosis"}';
-I.gender = analysis_data{:,"Gender"}';
-I.site = analysis_data{:,"Site"}';
-I.age = analysis_data{:,"age"}';
-
-% fill in data for each timepoint
-f = fieldnames(I);
-for j = 1:numel(f)
-    I.(f{j}) = repmat(I.(f{j}), [N.TR 1]);
-    I.(f{j}) = reshape(I.(f{j}), [sum(N.subjects{:,:})*N.TR 1]);    % reshape indices to column form
-end
-clear j f k
-
-% Confirm that indices are in proper order
-assert(all(unique(I.subject)==str2double(string(analysis_data.Properties.RowNames))), "Indices are out of order!");
-
-% convert index to table
-I = struct2table(I);
 
 
 %% Visualise static FNC matrix with indices
@@ -350,10 +355,10 @@ E(N.IC+1) = "Joint";
 entropy = array2table(entropy, "RowNames",analysis_data.Properties.RowNames, "VariableNames",E);
 
 
-%% Regress clinical variables against entropy
+%% Regress confounder variables against entropy
 
-% Format regression variables
-X = analysis_data(:, ["Diagnosis" "age" "Gender"]);
+% Format confounder variables
+X = analysis_data(:, ["Diagnosis" "Age" "Gender"]);
 X = convertvars(X, labels.data, 'double');
 X{:,"Diagnosis"} = strcmpi(labels.diagnosis(1), analysis_data{:,"Diagnosis"});
 X{:,"Gender"} = strcmpi(labels.gender(1), analysis_data{:,"Gender"});
@@ -365,7 +370,7 @@ for s = 1:numel(ind.site)
     S(:,s) = analysis_data{:,"Site"} == ind.site(s);
 end
 S = array2table(S, "VariableNames",strcat(repmat("Site", [numel(ind.site) 1]), num2str(ind.site)));
-X = horzcat(X,S);
+X = horzcat(X,S); clear S
 
 % fit linear model
 diagnosis = table('Size',[N.IC+1, 4], 'VariableTypes',repmat("double",[1 4]));
@@ -376,7 +381,97 @@ for c = 1:N.IC+1
 end
 diagnosis.Properties.RowNames = entropy.Properties.VariableNames;
 diagnosis.Properties.VariableNames = mdl.(x.Properties.VariableNames{end}).Coefficients.Properties.VariableNames;
-clear c s x
+clear c s x S
+
+
+%% Regress clinical variables against entropy (patients only)
+
+% Format confounder variables
+X = analysis_data(:, ["Diagnosis" "Age" "Gender"]);
+X = convertvars(X, labels.data, 'double');
+X{:,"Diagnosis"} = strcmpi(labels.diagnosis(1), analysis_data{:,"Diagnosis"});
+X{:,"Gender"} = strcmpi(labels.gender(1), analysis_data{:,"Gender"});
+X = renamevars(X, labels.data, ["Diagnosis" "Gender (1=M, 0=F)"]);
+
+% Format site information
+S = zeros(sum(N.subjects{:,:}), numel(ind.site));
+for s = 1:numel(ind.site)
+    S(:,s) = analysis_data{:,"Site"} == ind.site(s);
+end
+S = array2table(S, "VariableNames",strcat(repmat("Site", [numel(ind.site) 1]), num2str(ind.site)));
+X = horzcat(X,S);
+
+% Add clinical variables
+X = horzcat(analysis_data(:,contains(analysis_data.Properties.VariableNames, "PANSS")), X); % fitlm ignores rows with missing values
+
+% trim entropy & confounder matrices: patients only
+e = entropy(strcmpi("SZ", analysis_data{:,"Diagnosis"}), :);
+X = X(strcmpi("SZ", analysis_data{:,"Diagnosis"}), ~strcmpi("Diagnosis", X.Properties.VariableNames));
+
+% trim entropy & confounder matrices: remove rows with NaN values
+e = e(~(isnan(X{:,"PANSS(positive)"}) | isnan(X{:,"PANSS(negative)"})), :);
+X = X(~(isnan(X{:,"PANSS(positive)"}) | isnan(X{:,"PANSS(negative)"})), :);
+
+% fit linear model
+clinical = table('Size',[2*(N.IC+1), 4], 'VariableTypes',repmat("double",[1 4]));
+for c = 1:N.IC+1
+    x = horzcat(X, e(:,c));
+    mdl.(x.Properties.VariableNames{end}) = fitlm(x);
+    clinical(2*c-1,:) = mdl.(x.Properties.VariableNames{end}).Coefficients("PANSS(positive)",:);
+    clinical(2*c,:) = mdl.(x.Properties.VariableNames{end}).Coefficients("PANSS(negative)",:);
+end
+clinical.Properties.RowNames = join([entropy.Properties.VariableNames(floor(1:0.5:N.IC+1.5))' repmat(["PANSS(positive)";"PANSS(negative)"], [N.IC+1,1])]);
+clinical.Properties.VariableNames = mdl.(x.Properties.VariableNames{end}).Coefficients.Properties.VariableNames;
+clear c s x S
+
+
+%% Test cognitive variables for cross-correlation
+
+% Correlate analysis data variables against each other
+datcorr = corr(analysis_data{:, ~contains(analysis_data.Properties.VariableNames, ["Diagnosis" "Gender" "Site"])}, 'rows','pairwise');
+i = analysis_data.Properties.VariableNames(~contains(analysis_data.Properties.VariableNames, ["Diagnosis" "Gender" "Site"]));
+
+% Visualize covariance matrix
+sFNC{2} = nan(N.conditions, N.ROI, N.ROI);
+F(N.fig) = figure; F(N.fig).Position = get(0,'screensize');
+N.fig = N.fig + 1;
+lim.c = max(abs(datcorr), [], 'all');
+imagesc(datcorr); colormap jet; pbaspect([1 1 1]); colorbar;
+clim([-max(abs(datcorr), [], 'all') max(abs(datcorr), [], 'all')]);
+ylabel('Cognitive Variables'); xlabel('Cognitive Variables');
+xticks(1:numel(i)); yticks(1:numel(i));
+xticklabels(i); yticklabels(i);
+title("Correlation Matrix of Cognitive Variables");
+clear i
+
+
+%% Regress cognitive variables against entropy
+
+% Format confounder variables
+% X = analysis_data(:, ~contains(analysis_data.Properties.VariableNames, ["PANSS" "Site"]));
+X = analysis_data(:, ["Diagnosis" "Age" "Gender" "CMINDS_composite"]);
+X = convertvars(X, "Gender", 'double');
+X{:,"Gender"} = strcmpi(labels.gender(1), analysis_data{:,"Gender"});
+X = renamevars(X, "Gender", "Gender (1=M, 0=F)"]);
+
+% add site information
+S = zeros(sum(N.subjects{:,:}), numel(ind.site));
+for s = 1:numel(ind.site)
+    S(:,s) = analysis_data{:,"Site"} == ind.site(s);
+end
+S = array2table(S, "VariableNames",strcat(repmat("Site", [numel(ind.site) 1]), num2str(ind.site)));
+X = horzcat(X,S); clear S
+
+% fit linear model
+cognitive = table('Size',[N.IC+1, 4], 'VariableTypes',repmat("double",[1 4]));
+for c = 1:N.IC+1
+    x = horzcat(X, entropy(:,c));
+    mdl.(x.Properties.VariableNames{end}) = fitlm(x);
+    cognitive(c,:) = mdl.(x.Properties.VariableNames{end}).Coefficients("CMINDS_composite",:);
+end
+cognitive.Properties.RowNames = entropy.Properties.VariableNames;
+cognitive.Properties.VariableNames = mdl.(x.Properties.VariableNames{end}).Coefficients.Properties.VariableNames;
+clear c s x S
 
 
 %% Test for group-level changes
@@ -636,14 +731,14 @@ clear n sm s c k j ts E
 
 %% Save results & figure(s)
 
-% % Save figures
-% savefig(F, fullfile(path{4}, fileName), 'compact');
-% for c = 1:numel(F)
-%     saveas(F(c), fullfile(path{4}, "Figures", strjoin([fileName, num2str(c)], '_')), 'svg');
-% end
-% clear c F
-% 
-% % Save files
-% N.fig = N.fig - 1;
-% clear ts;
-% save(fullfile(path{4}, fileName));
+% Save figures
+savefig(F, fullfile(path{4}, fileName), 'compact');
+for c = 1:numel(F)
+    saveas(F(c), fullfile(path{4}, "Figures", strjoin([fileName, num2str(c)], '-')), 'svg');
+end
+clear c F
+
+% Save files
+N.fig = N.fig - 1;
+clear ts;
+save(fullfile(path{4}, fileName));
