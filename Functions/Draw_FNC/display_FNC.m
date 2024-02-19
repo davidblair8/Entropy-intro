@@ -41,6 +41,6 @@ if (~exist('mx','var')),
   mx = maxN(abs(sFNC-diag(diag(sFNC))))*.8;
 end;
 
-Draw_FNC_Trends(sFNC-eye(53,53), domain_Name, domain_ICN, [-mx mx])
+Draw_FNC_Trends(sFNC, domain_Name, domain_ICN, [-mx mx])
 
 axis image

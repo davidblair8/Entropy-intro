@@ -1,12 +1,14 @@
-ah%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%% Draw pair FNC
 %%%% Daniel
 %%%% Trends
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 function [] = Draw_FNC_Trends(FC_input, domain, domain_ICN, Bar_range)
 % FC_input: is a N x N matrix, where N is the number of ROI
-% ICN_label: is the label of ICN, if drawing ROI based matrix, just set it as [1:N];
+% domain: is the label of ICN, if drawing ROI based matrix, just set it as [1:N];
+% domain_ICN: 
 % Bar_range: the max and min of the colorbar. For example, [-0.5 0.5].
+
 if nargin < 4
     Bar_range = [-1 1];
 end
@@ -20,14 +22,16 @@ for i = 1:length(domain)
     end
 end
 %% draw figure
-figure
+
+%figure
+
 % load FC matrix
 FC_draw = FC_input;
 [X_range Y_range] = size(FC_draw);
 
 % figure size
-set(gcf,'Position',[0 0 850 800]);
-set(gca,'Position',[.06 .06 .90 .90]);
+%set(gcf,'Position',[0 0 850 800]);
+%set(gca,'Position',[.06 .06 .90 .90]);
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% previous codes 
 % set XY axis range
@@ -47,6 +51,7 @@ figure_handle = imagesc(FC_draw);
 colorbar;
 set(gca,'Fontsize', 14)
 set(gca,'Clim', Bar_range);
+
 %% intersect colmap
 % if opt_inter == 1
 %     inter_num = 4;
@@ -73,6 +78,7 @@ set(gca,'Clim', Bar_range);
 %       colmap(color_idx+1,:) = [1 1 1];
 %       colmap(color_idx-1,:) = [1 1 1];
 % end
+
 %% gradient map
 ini_idx = 20; % small:edge close to black;
 zero_modified_idx = 2;
@@ -97,7 +103,7 @@ colormap(colmap);
 set(gca,'YTick',[])
 set(gca,'XTick',[])
 
-% diagnol entries
+% diagonal entries
 axis_ratio = (1:1:X_range);
 for i = 1:X_range
     tx = num2str(ICN_label(i));

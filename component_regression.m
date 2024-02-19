@@ -214,7 +214,7 @@ I = struct2table(I);
 % N.fig = N.fig + 1;
 
 % Set number of ICs
-N.IC = 3;
+N.IC = 9;
 
 
 %% Define filename based on parameters
@@ -253,8 +253,9 @@ for c = 1:N.conditions
 
     % Visualize group sFNC
     a(1,c) = subplot(1, N.conditions, c);
-    display_FNC(squeeze(sFNC{2}(c,:,:)), 0.8);    % imagesc(squeeze(sFNC{2}(c,:,:))); colormap jet;
-    clim([-lim.c lim.c]); pbaspect([1 1 1]); colorbar;
+    display_FNC(squeeze(sFNC{2}(c,:,:)), 0.8);    % imagesc(squeeze(sFNC{2}(c,:,:)));
+    % colormap jet; clim([-lim.c lim.c]);
+    pbaspect([1 1 1]); colorbar;
     ylabel('Functional Networks'); xlabel('Functional Networks');
     title(strjoin(["Mean FNC of", labels.diagnosis(c)]));
 end
@@ -546,17 +547,16 @@ disp(strjoin(["Kolmogorov-Smirnov two-tailed test detects", num2str(nnz(multcorr
 disp(strjoin(["Difference-of-means permutation test detects", num2str(nnz(multcorr.FDR{i,"Permutation"})), "significant ICs"], " "));
 clear i
 
-
-%% Compile tables: entropy means, standard deviations
-
-% estats.joint.mean = mean(entropy{:,"Joint"},'omitnan');
-% estats.joint.mean = array2table(estats.joint.mean, 'VariableNames',labels.diagnosis);
-% estats.comp.mean = squeeze(mean(e.comp,2,'omitnan'));
-% estats.comp.mean = array2table(estats.comp.mean, 'VariableNames',labels.diagnosis);
-% estats.joint.std = std(e.joint,0,'omitnan');
-% estats.joint.std = array2table(estats.joint.std, 'VariableNames',labels.diagnosis);
-% estats.comp.std = squeeze(std(e.comp,0,2,'omitnan'));
-% estats.comp.std = array2table(estats.comp.std, 'VariableNames',labels.diagnosis);
+% Compile tables: entropy group mean & variances
+stats = nan(2*numel(labels.diagnosis), N.IC+1);
+i = [repmat("Mean", [numel(labels.diagnosis) 1]); repmat("Variance", [numel(labels.diagnosis) 1])];
+for k = 1:numel(labels.diagnosis)
+    stats(k,:) = mean(entropy{strcmpi(analysis_data{:,"Diagnosis"},labels.diagnosis(k)),:},'omitnan');
+    stats(k+numel(labels.diagnosis),:) = var(entropy{strcmpi(analysis_data{:,"Diagnosis"},labels.diagnosis(k)),:},'omitnan');
+    i(k) = strjoin([labels.diagnosis(k), i(k)]);
+    i(k+numel(labels.diagnosis)) = strjoin([labels.diagnosis(k), i(k+numel(labels.diagnosis))]);
+end
+stats = array2table(stats, "RowNames",i, "VariableNames",entropy.Properties.VariableNames);
 
 
 %% Visualise components with group-level changes
@@ -591,7 +591,7 @@ if isfield(ind, 'e')
         % Plot ICA source matrices
         ax(j,1) = subplot(3, numel(ind.e), j);
         display_FNC(icatb_vec2mat(W(ind.e(j),:)), 0.8);     % imagesc(icatb_vec2mat(W(ind.e(j),:)));
-        colormap jet; clim([-lim.color lim.color]);
+        % colormap jet; clim([-lim.color lim.color]);
         pbaspect([1 1 1]); colorbar; hold on
         ylabel('Functional Networks'); xlabel('Functional Networks');
         title(strjoin(["FNC of Component", num2str(ind.e(j))]), 'FontSize',16);
