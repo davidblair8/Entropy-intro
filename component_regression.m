@@ -214,13 +214,13 @@ I = struct2table(I);
 % N.fig = N.fig + 1;
 
 % Set number of ICs
-N.IC = 8;
+N.IC = 3;
 
 
 %% Define filename based on parameters
 
 % Get number of ICs
-fileName = fullfile("Regression", strcat(num2str(N.IC), "ICs"));
+fileName = fullfile(strcat(num2str(N.IC), "ICs"));
 
 % Set iteration number
 fList = dir(fullfile(path{4}, strcat(strjoin([fileName, "iteration"], '-'), '*.mat')));	% Get file list
@@ -253,7 +253,7 @@ for c = 1:N.conditions
 
     % Visualize group sFNC
     a(1,c) = subplot(1, N.conditions, c);
-    imagesc(squeeze(sFNC{2}(c,:,:))); colormap jet;
+    display_FNC(squeeze(sFNC{2}(c,:,:)), 0.8);    % imagesc(squeeze(sFNC{2}(c,:,:))); colormap jet;
     clim([-lim.c lim.c]); pbaspect([1 1 1]); colorbar;
     ylabel('Functional Networks'); xlabel('Functional Networks');
     title(strjoin(["Mean FNC of", labels.diagnosis(c)]));
@@ -452,7 +452,7 @@ clear i
 X = analysis_data(:, ["Diagnosis" "Age" "Gender" "CMINDS_composite"]);
 X = convertvars(X, "Gender", 'double');
 X{:,"Gender"} = strcmpi(labels.gender(1), analysis_data{:,"Gender"});
-X = renamevars(X, "Gender", "Gender (1=M, 0=F)"]);
+X = renamevars(X, "Gender", "Gender (1=M, 0=F)");
 
 % add site information
 S = zeros(sum(N.subjects{:,:}), numel(ind.site));
@@ -590,7 +590,8 @@ if isfield(ind, 'e')
 
         % Plot ICA source matrices
         ax(j,1) = subplot(3, numel(ind.e), j);
-        imagesc(icatb_vec2mat(W(ind.e(j),:))); colormap jet; clim([-lim.color lim.color]);
+        display_FNC(icatb_vec2mat(W(ind.e(j),:)), 0.8);     % imagesc(icatb_vec2mat(W(ind.e(j),:)));
+        colormap jet; clim([-lim.color lim.color]);
         pbaspect([1 1 1]); colorbar; hold on
         ylabel('Functional Networks'); xlabel('Functional Networks');
         title(strjoin(["FNC of Component", num2str(ind.e(j))]), 'FontSize',16);
