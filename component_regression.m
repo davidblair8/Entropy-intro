@@ -423,7 +423,7 @@ for c = 1:N.IC+1
 end
 clinical.Properties.RowNames = join([entropy.Properties.VariableNames(floor(1:0.5:N.IC+1.5))' repmat(["PANSS(positive)";"PANSS(negative)"], [N.IC+1,1])]);
 clinical.Properties.VariableNames = mdl.(x.Properties.VariableNames{end}).Coefficients.Properties.VariableNames;
-clear c s x S
+clear c s x S e
 
 
 %% Test cognitive variables for cross-correlation
@@ -446,7 +446,7 @@ title("Correlation Matrix of Cognitive Variables");
 clear i
 
 
-%% Regress cognitive variables against entropy
+%% Regress cognitive variable against entropy
 
 % Format confounder variables
 % X = analysis_data(:, ~contains(analysis_data.Properties.VariableNames, ["PANSS" "Site"]));
@@ -473,6 +473,9 @@ end
 cognitive.Properties.RowNames = entropy.Properties.VariableNames;
 cognitive.Properties.VariableNames = mdl.(x.Properties.VariableNames{end}).Coefficients.Properties.VariableNames;
 clear c s x S
+
+% run multiple-comparison correction
+[FDR, ~, pp] = mafdr(cognitive{:,"pValue"}, 'Showplot',true);
 
 
 %% Test for group-level changes
@@ -557,6 +560,7 @@ for k = 1:numel(labels.diagnosis)
     i(k+numel(labels.diagnosis)) = strjoin([labels.diagnosis(k), i(k+numel(labels.diagnosis))]);
 end
 stats = array2table(stats, "RowNames",i, "VariableNames",entropy.Properties.VariableNames);
+clear i
 
 
 %% Visualise components with group-level changes
@@ -727,7 +731,7 @@ clear k ts E
 % corrvals = num2cell(corrvals);
 % corrvals(:,1) = analysis_data.Properties.VariableNames(cell2mat(corrvals(:,1)));
 % corrvals = cell2table(corrvals, 'VariableNames',["Variable", "Component", "rho", "p"]);
-clear n sm s c k j ts E
+clear n sm s c k j ts E i
 
 
 %% Save results & figure(s)
@@ -737,7 +741,7 @@ savefig(F, fullfile(path{4}, fileName), 'compact');
 for c = 1:numel(F)
     saveas(F(c), fullfile(path{4}, "Figures", strjoin([fileName, num2str(c)], '-')), 'svg');
 end
-clear c F
+clear c F a ax axes
 
 % Save files
 N.fig = N.fig - 1;
