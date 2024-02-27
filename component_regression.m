@@ -551,15 +551,15 @@ disp(strjoin(["Difference-of-means permutation test detects", num2str(nnz(multco
 clear i
 
 % Compile tables: entropy group mean & variances
-stats = nan(2*numel(labels.diagnosis), N.IC+1);
-i = [repmat("Mean", [numel(labels.diagnosis) 1]); repmat("Variance", [numel(labels.diagnosis) 1])];
+stats = nan(N.IC+1, 2*numel(labels.diagnosis));
+i = repmat(["Mean", "Variance"], [1 numel(labels.diagnosis)]);
 for k = 1:numel(labels.diagnosis)
-    stats(k,:) = mean(entropy{strcmpi(analysis_data{:,"Diagnosis"},labels.diagnosis(k)),:},'omitnan');
-    stats(k+numel(labels.diagnosis),:) = var(entropy{strcmpi(analysis_data{:,"Diagnosis"},labels.diagnosis(k)),:},'omitnan');
-    i(k) = strjoin([labels.diagnosis(k), i(k)]);
-    i(k+numel(labels.diagnosis)) = strjoin([labels.diagnosis(k), i(k+numel(labels.diagnosis))]);
+    stats(:,2*k-1) = mean(entropy{strcmpi(analysis_data{:,"Diagnosis"},labels.diagnosis(k)),:},'omitnan');
+    stats(:,2*k) = var(entropy{strcmpi(analysis_data{:,"Diagnosis"},labels.diagnosis(k)),:},'omitnan');
+    i(2*k-1) = strjoin([labels.diagnosis(k), i(2*k-1)]);
+    i(2*k) = strjoin([labels.diagnosis(k), i(2*k)]);
 end
-stats = array2table(stats, "RowNames",i, "VariableNames",entropy.Properties.VariableNames);
+stats = array2table(stats, "RowNames",entropy.Properties.VariableNames, "VariableNames",i);
 clear i
 
 
