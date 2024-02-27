@@ -72,7 +72,7 @@ N.fig = 1;
 N.TR = size(DFNC_FBIRN{1},1);
 
 % identify diagnosis column
-i(1,:) = contains(analysis_data.Properties.VariableNames, 'diagnosis');
+i = contains(analysis_data.Properties.VariableNames, 'diagnosis');
 
 % Index conditions
 d = unique(analysis_data{:,i});
@@ -214,7 +214,7 @@ I = struct2table(I);
 % N.fig = N.fig + 1;
 
 % Set number of ICs
-N.IC = 9;
+N.IC = 8;
 
 
 %% Define filename based on parameters
@@ -253,7 +253,7 @@ for c = 1:N.conditions
 
     % Visualize group sFNC
     a(1,c) = subplot(1, N.conditions, c);
-    display_FNC(squeeze(sFNC{2}(c,:,:)), 0.8);    % imagesc(squeeze(sFNC{2}(c,:,:)));
+    display_FNC(squeeze(sFNC{2}(c,:,:)), max(sFNC{2},[],"all"));    % imagesc(squeeze(sFNC{2}(c,:,:)));
     % colormap jet; clim([-lim.c lim.c]);
     pbaspect([1 1 1]); colorbar;
     ylabel('Functional Networks'); xlabel('Functional Networks');
@@ -594,7 +594,7 @@ if isfield(ind, 'e')
 
         % Plot ICA source matrices
         ax(j,1) = subplot(3, numel(ind.e), j);
-        display_FNC(icatb_vec2mat(W(ind.e(j),:)), 0.8);     % imagesc(icatb_vec2mat(W(ind.e(j),:)));
+        display_FNC(icatb_vec2mat(W(ind.e(j),:)), max(W,[],'all'));     % imagesc(icatb_vec2mat(W(ind.e(j),:)));
         % colormap jet; clim([-lim.color lim.color]);
         pbaspect([1 1 1]); colorbar; hold on
         ylabel('Functional Networks'); xlabel('Functional Networks');
@@ -618,6 +618,18 @@ if isfield(ind, 'e')
         ylabel("Shannon Entropy");
         plot(1:2, [max(E(:,:,ind.e(j)),[],'all','omitnan')+0.5, max(E(:,:,ind.e(j)),[],'all','omitnan')+0.5], 'k-', 'LineWidth',1);
         plot(1.5, max(E(:,:,ind.e(j)),[],'all','omitnan')+1, 'k*', 'MarkerSize',10);
+    end
+
+    % Plot ICA source matrices (large)
+    for j = 1:numel(ind.e)
+        F(N.fig) = figure; N.fig = N.fig + 1;
+        F(N.fig-1).Position = get(0,'screensize');
+        display_FNC(icatb_vec2mat(W(ind.e(j),:)), max(W,[],'all'));     % imagesc(icatb_vec2mat(W(ind.e(j),:)));
+        % colormap jet; clim([-lim.color lim.color]);
+        pbaspect([1 1 1]); colorbar; hold on
+        ylabel('Functional Networks'); xlabel('Functional Networks');
+        title(strjoin(["FNC of Component", num2str(ind.e(j))]), 'FontSize',16);
+        set(ax(j,1), {'XLim','YLim','XTick','YTick'}, {[0.5 N.ROI+0.5], [0.6 N.ROI+0.5], [], []}); hold on;
     end
 end
 clear k ts E

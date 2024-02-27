@@ -119,11 +119,11 @@ for i = 1:(X_range+1)
     Linerange = ((0.5):1:(X_range+0.5));
     axisposi  = (i-0.5).*ones(length(Linerange),1);
     if (i ~= draw_idx)
-        plot(Linerange, axisposi, 'b', 'LineWidth', 0.5);
-        plot(axisposi, Linerange, 'b', 'LineWidth', 0.5);
+        plot(Linerange, axisposi, 'b', 'LineWidth', 0.5);   % sets interregional line width
+        plot(axisposi, Linerange, 'b', 'LineWidth', 0.5);   % sets interregional line width
     else
-        plot(Linerange, axisposi, 'k', 'LineWidth', 1.5);
-        plot(axisposi, Linerange, 'k', 'LineWidth', 1.5);
+        plot(Linerange, axisposi, 'k', 'LineWidth', 1.5);   % sets inter-domain line width
+        plot(axisposi, Linerange, 'k', 'LineWidth', 1.5);   % sets inter-domain line width
     end
 end
 
