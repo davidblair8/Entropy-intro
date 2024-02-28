@@ -12,34 +12,34 @@ clear; close all; clc
 rng('shuffle');
 
 % Find general path (enclosing folder of current directory)
-path{1} = string(strsplit(pwd, filesep));
-path{2,1} = fullfile(path{1}{:});
-path{1,1} = fullfile(path{1}{1:end-1});
+pth{1} = string(strsplit(pwd, filesep));
+pth{2,1} = fullfile(pth{1}{:});
+pth{1,1} = fullfile(pth{1}{1:end-1});
 
 % Set data-specific subdirectories
-path{3,1} = fullfile(path{2}, 'Data');
-path{4,1} = fullfile(path{2}, 'Results','Regression');
+pth{3,1} = fullfile(pth{2}, 'Data');
+pth{4,1} = fullfile(pth{2}, 'Results','Regression');
 
 % Add relevant paths
-fpath{1,1} = fullfile(path{1}, 'MATLAB','spm12');
-fpath{2,1} = fullfile(path{1}, 'MATLAB','gift','GroupICAT','icatb');
-fpath{3,1} = fullfile(path{1}, 'MATLAB','FastICA');
-fpath{4,1} = fullfile(path{1}, 'MATLAB','permutationTest');
-fpath{5,1} = fullfile(path{2}, 'Functions');
-fpath{6,1} = fullfile(path{1}, 'MATLAB','BCT');
+fpth(1,1) = string(fullfile(pth{1}, 'MATLAB','spm12'));
+fpth(2,1) = string(fullfile(pth{1}, 'MATLAB','gift','GroupICAT','icatb'));
+fpth(3,1) = string(fullfile(pth{1}, 'MATLAB','FastICA'));
+fpth(4,1) = string(fullfile(pth{1}, 'MATLAB','permutationTest'));
+fpth(5,1) = string(fullfile(pth{2}, 'Functions'));
+fpth(6,1) = string(fullfile(pth{1}, 'MATLAB','BCT'));
 % fpath{5,1} = fullfile(path{2}, 'LEICA', 'Functions');
-addpath(fpath{1});
-for k = 2:numel(fpath)
-	addpath(genpath(fpath{k}));
+addpath(fpth(1));
+for k = 2:numel(fpth)
+	addpath(genpath(fpth(k)));
 end
-clear fpath k
+clear fpth k
 
 
 %% Load and sort data
 
 % Load formatted dFNC data
-load(fullfile(path{3}, 'FBIRN_DFNC_table.mat'));
-load(fullfile(path{3}, 'head_motion_meanFD.mat'));
+load(fullfile(pth{3}, 'FBIRN_DFNC_table.mat'));
+load(fullfile(pth{3}, 'head_motion_meanFD.mat'));
 
 % Confirm that IDs, data are properly indexed
 assert(all(str2double(string(cell2mat(analysis_ID))) == str2double(analysis_data.Properties.RowNames)), "Data labels are not properly ordered!");
@@ -139,7 +139,7 @@ analysis_data = renamevars(analysis_data, ["age" "diagnosis(1:sz; 2:hc)" "gender
 %% Set region labels & maps
 
 % Load functional network labels
-labels.FNC = readtable(fullfile(path{3}, 'NeuroMark_FNC_labels.xlsx')); % NeuroMark functional network labels & locations
+labels.FNC = readtable(fullfile(pth{3}, 'NeuroMark_FNC_labels.xlsx')); % NeuroMark functional network labels & locations
 labels.FNC = renamevars(labels.FNC, "SelectedComponentsAsRegionsOfInterest", "Functional Networks");
 
 % Remove borders between functional domains
@@ -223,7 +223,7 @@ N.IC = 8;
 fileName = fullfile(strcat(num2str(N.IC), "ICs"));
 
 % Set iteration number
-fList = dir(fullfile(path{4}, strcat(strjoin([fileName, "iteration"], '-'), '*.mat')));	% Get file list
+fList = dir(fullfile(pth{4}, strcat(strjoin([fileName, "iteration"], '-'), '*.mat')));	% Get file list
 a = false(numel(fList),1);
 for n = 1:numel(fList)
     a(n) = matches("iteration", strsplit(fLis.name, '_'));
@@ -752,13 +752,13 @@ clear n sm s c k j ts E i
 %% Save results & figure(s)
 
 % Save figures
-savefig(F, fullfile(path{4}, fileName), 'compact');
+savefig(F, fullfile(pth{4}, fileName), 'compact');
 for c = 1:numel(F)
-    saveas(F(c), fullfile(path{4}, "Figures", strjoin([fileName, num2str(c)], '-')), 'svg');
+    saveas(F(c), fullfile(pth{4}, "Figures", strjoin([fileName, num2str(c)], '-')), 'svg');
 end
 clear c F a ax axes
 
 % Save files
 N.fig = N.fig - 1;
 clear ts;
-save(fullfile(path{4}, fileName));
+save(fullfile(pth{4}, fileName));
