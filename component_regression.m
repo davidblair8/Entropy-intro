@@ -12,9 +12,9 @@ clear; close all; clc
 rng('shuffle');
 
 % Find general path (enclosing folder of current directory)
-path{1} = strsplit(pwd, '/');
-path{2,1} = strjoin(path{1},'/');
-path{1,1} = strjoin(path{1}(1:end-1),'/');
+path{1} = string(strsplit(pwd, filesep));
+path{2,1} = fullfile(path{1}{:});
+path{1,1} = fullfile(path{1}{1:end-1});
 
 % Set data-specific subdirectories
 path{3,1} = fullfile(path{2}, 'Data');
@@ -472,10 +472,13 @@ for c = 1:N.IC+1
 end
 cognitive.Properties.RowNames = entropy.Properties.VariableNames;
 cognitive.Properties.VariableNames = mdl.(x.Properties.VariableNames{end}).Coefficients.Properties.VariableNames;
-clear c s x S
 
 % run multiple-comparison correction
-[FDR, ~, pp] = mafdr(cognitive{:,"pValue"}, 'Showplot',true);
+multcorr.cognitive = table('Size',[N.IC+1,3], 'VariableTypes',repmat("double",[3 1]), ...
+    'VariableNames',["FDR" "Bonferroni" "Sidak"], 'RowNames',entropy.Properties.VariableNames);
+[multcorr.cognitive{1:N.IC,"FDR"}, multcorr.cognitive{1:N.IC,"Bonferroni"}, multcorr.cognitive{1:N.IC,"Sidak"}] = mCompCorr(N.IC, cognitive{1:N.IC,'pValue'}, 0.05);
+clear c s x S k t
+% FDR = mafdr(cognitive{1:N.IC,'pValue'});
 
 
 %% Test for group-level changes
@@ -521,7 +524,7 @@ multcorr.Bonferroni = multcorr.FDR;
 multcorr.Sidak = multcorr.FDR;
 for t = 1:numel(p.Properties.VariableNames)
     c = p.Properties.VariableNames(t);
-    [multcorr.FDR{:,c}, multcorr.Bonferroni{:,c}, multcorr.Sidak{:,c}] = mCompCorr(N.IC+1, p{:,c}, 0.05);
+    [multcorr.FDR{:,c}, multcorr.Bonferroni{:,c}, multcorr.Sidak{:,c}] = mCompCorr(N.IC, p{:,c}, 0.05);
 end
 clear c k t
 
