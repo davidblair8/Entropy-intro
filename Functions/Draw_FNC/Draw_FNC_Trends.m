@@ -3,10 +3,13 @@
 %%%% Daniel
 %%%% Trends
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function [] = Draw_FNC_Trends(FC_input, domain, domain_ICN, Bar_range)
+function [] = Draw_FNC_Trends(FC_input, domain, domain_ICN, lw, Bar_range)
 % FC_input: is a N x N matrix, where N is the number of ROI
 % domain: is the label of ICN, if drawing ROI based matrix, just set it as [1:N];
 % domain_ICN: 
+% lw: line widths for interregional and inter-domain borders.
+%   First element is interregional width
+%   Second element is inter-domain width
 % Bar_range: the max and min of the colorbar. For example, [-0.5 0.5].
 
 if nargin < 4
@@ -27,7 +30,7 @@ end
 
 % load FC matrix
 FC_draw = FC_input;
-[X_range Y_range] = size(FC_draw);
+[X_range, ~] = size(FC_draw);
 
 % figure size
 %set(gcf,'Position',[0 0 850 800]);
@@ -118,12 +121,13 @@ for i = 1:(X_range+1)
     hold on
     Linerange = ((0.5):1:(X_range+0.5));
     axisposi  = (i-0.5).*ones(length(Linerange),1);
-    if (i ~= draw_idx)
-        plot(Linerange, axisposi, 'b', 'LineWidth', 0.5);   % sets interregional line width
-        plot(axisposi, Linerange, 'b', 'LineWidth', 0.5);   % sets interregional line width
+    if (i ~= draw_idx) & lw(1) > 0
+        plot(Linerange, axisposi, 'b', 'LineWidth', lw(1));
+        plot(axisposi, Linerange, 'b', 'LineWidth', lw(1));
+    elseif (i ~= draw_idx)
     else
-        plot(Linerange, axisposi, 'k', 'LineWidth', 1.5);   % sets inter-domain line width
-        plot(axisposi, Linerange, 'k', 'LineWidth', 1.5);   % sets inter-domain line width
+        plot(Linerange, axisposi, 'k', 'LineWidth', lw(2));
+        plot(axisposi, Linerange, 'k', 'LineWidth', lw(2));
     end
 end
 
