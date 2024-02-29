@@ -568,6 +568,16 @@ clear i
 
 %% Visualise components with group-level changes
 
+% import NeuroMark templates from GIFT toolbox
+fname = fullfile(fileparts(which('gift.m')), 'icatb_templates', 'Neuromark_fMRI_1.0.nii');
+
+% convert network domain label format for connectogram
+network_names = cell(numel(labels.FDs), 2);
+for n = 1:numel(labels.FDs)
+    network_names{n,1} = string(labels.FDs{n,:});
+    network_names{n,2} = find(strcmpi(string(labels.FND{:,"Functional Networks"}), string(labels.FDs{n,:})))';
+end
+
 % Compile entropy array: subject x condition x component
 E = nan(max(N.subjects{:,:}), N.conditions, N.IC+1);
 for k = 1:N.conditions
@@ -604,17 +614,23 @@ if isfield(ind, 'e')
             ts(1:N.TR*N.subjects{:,labels.diagnosis(k)},k) = sources(strcmpi(I{:,"diagnosis"}, labels.diagnosis(k)), ind.e(j));
         end
 
-        % Plot ICA source matrices
-        ax(j,1) = subplot(3, numel(ind.e), j);
-        display_FNC(icatb_vec2mat(W(ind.e(j),:)), [0 1.5], max(W,[],'all'));     % imagesc(icatb_vec2mat(W(ind.e(j),:)));
+        % Plot tFNC correlation matrices
+        ax(j,1) = subplot(4, numel(ind.e), j);
+        display_FNC(icatb_vec2mat(W(ind.e(j),:)), [0 1], max(W,[],'all'));     % imagesc(icatb_vec2mat(W(ind.e(j),:)));
         % colormap jet; clim([-lim.color lim.color]);
         pbaspect([1 1 1]); colorbar; hold on
         ylabel('Functional Networks'); xlabel('Functional Networks');
         title(strjoin(["FNC of Component", num2str(ind.e(j))]), 'FontSize',16);
         set(ax(j,1), {'XLim','YLim','XTick','YTick'}, {[0.5 N.ROI+0.5], [0.6 N.ROI+0.5], [], []}); hold on;
 
+        % Plot tFNC connectograms
+        ax(j,3) = subplot(4, numel(ind.e), j+numel(ind.e));
+        icatb_plot_connectogram([], network_names, 'C', icatb_vec2mat(W(ind.e(j),:)), 'threshold',2, ...
+            'image_file_names',fname, 'colorbar_label','Source Weight', 'slice_plane','sagittal', ...
+            'conn_threshold',0.02, 'display_type','render', 'exclude_zeros',0, 'convert_to_zscores',0);
+
         % Plot time series
-        ax(j,2) = subplot(3, numel(ind.e), j+numel(ind.e)); hold on
+        ax(j,3) = subplot(4, numel(ind.e), j+(2*numel(ind.e))); hold on
         plot(1:N.TR*max(N.subjects{:,:}), ts); hold on
         title({"Time Course of ", strjoin(["Component", num2str(ind.e(j))], " ")}, 'FontSize',16);
         set(ax(j,2), {'XTick', 'XTickLabels', 'XLim', 'YLim'}, {0:N.TR:max(N.subjects{:,:})*N.TR, [], [0 max(N.subjects{:,:})*N.TR], [-lim.y lim.y]});
@@ -623,8 +639,8 @@ if isfield(ind, 'e')
         xlabel("Subjects");
 
         % Plot entropies
-        ax(j,3) = subplot(3, numel(ind.e), j+(2*numel(ind.e))); hold on
-        boxplot(squeeze(E(:,:,ind.e(j))), labels.diagnosis, 'Notch','on');
+        ax(j,4) = subplot(4, numel(ind.e), j+(3*numel(ind.e)));
+        boxplot(squeeze(E(:,:,ind.e(j))), labels.diagnosis, 'Notch','on'); hold on
         ylim([min(E(:,:,ind.e(j)),[],'all')-2, max(E(:,:,ind.e(j)),[],'all','omitnan')+2]);
         title({"Group Entropies of", strjoin(["Component", num2str(ind.e(j))], " ")}, 'FontSize',16);
         ylabel("Shannon Entropy");
@@ -644,7 +660,7 @@ if isfield(ind, 'e')
         set(ax(j,1), {'XLim','YLim','XTick','YTick'}, {[0.5 N.ROI+0.5], [0.6 N.ROI+0.5], [], []}); hold on;
     end
 end
-clear k ts E
+clear k ts fname network_names n j
 
 
 %% Correlate entropy score against clinical variables
