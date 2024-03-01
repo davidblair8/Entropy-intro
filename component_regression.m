@@ -615,22 +615,22 @@ if isfield(ind, 'e')
         end
 
         % Plot tFNC correlation matrices
-        ax(j,1) = subplot(4, numel(ind.e), j);
-        display_FNC(icatb_vec2mat(W(ind.e(j),:)), [0 1], max(W,[],'all'));     % imagesc(icatb_vec2mat(W(ind.e(j),:)));
+        ax(j,1) = subplot(3, numel(ind.e), j);
+        display_FNC(icatb_vec2mat(W(ind.e(j),:)), [0 1], lim.color);     % imagesc(icatb_vec2mat(W(ind.e(j),:)));
         % colormap jet; clim([-lim.color lim.color]);
         pbaspect([1 1 1]); colorbar; hold on
         ylabel('Functional Networks'); xlabel('Functional Networks');
         title(strjoin(["FNC of Component", num2str(ind.e(j))]), 'FontSize',16);
         set(ax(j,1), {'XLim','YLim','XTick','YTick'}, {[0.5 N.ROI+0.5], [0.6 N.ROI+0.5], [], []}); hold on;
 
-        % Plot tFNC connectograms
-        ax(j,3) = subplot(4, numel(ind.e), j+numel(ind.e));
-        icatb_plot_connectogram([], network_names, 'C', icatb_vec2mat(W(ind.e(j),:)), 'threshold',2, ...
-            'image_file_names',fname, 'colorbar_label','Source Weight', 'slice_plane','sagittal', ...
-            'conn_threshold',0.02, 'display_type','render', 'exclude_zeros',0, 'convert_to_zscores',0);
+        % % Plot tFNC connectograms
+        % ax(j,2) = subplot(4, numel(ind.e), j+numel(ind.e));
+        % icatb_plot_connectogram([], network_names, 'C', icatb_vec2mat(W(ind.e(j),:)), 'threshold',2, ...
+        %     'image_file_names',fname, 'colorbar_label','Source Weight', 'slice_plane','sagittal', ...
+        %     'conn_threshold',0.02, 'display_type','render', 'exclude_zeros',0, 'convert_to_zscores',0, 'handle',ax(j,2));
 
         % Plot time series
-        ax(j,3) = subplot(4, numel(ind.e), j+(2*numel(ind.e)));
+        ax(j,2) = subplot(3, numel(ind.e), j+(1*numel(ind.e)));
         plot(1:N.TR*max(N.subjects{:,:}), ts); hold on
         title({"Time Course of ", strjoin(["Component", num2str(ind.e(j))], " ")}, 'FontSize',16);
         set(ax(j,2), {'XTick', 'XTickLabels', 'XLim', 'YLim'}, {0:N.TR:max(N.subjects{:,:})*N.TR, [], [0 max(N.subjects{:,:})*N.TR], [-lim.y lim.y]});
@@ -639,7 +639,7 @@ if isfield(ind, 'e')
         xlabel("Subjects");
 
         % Plot entropies
-        ax(j,4) = subplot(4, numel(ind.e), j+(3*numel(ind.e)));
+        ax(j,3) = subplot(3, numel(ind.e), j+(2*numel(ind.e)));
         boxplot(squeeze(E(:,:,ind.e(j))), labels.diagnosis, 'Notch','on'); hold on
         ylim([min(E(:,:,ind.e(j)),[],'all')-2, max(E(:,:,ind.e(j)),[],'all','omitnan')+2]);
         title({"Group Entropies of", strjoin(["Component", num2str(ind.e(j))], " ")}, 'FontSize',16);
@@ -648,26 +648,26 @@ if isfield(ind, 'e')
         plot(1.5, max(E(:,:,ind.e(j)),[],'all','omitnan')+1, 'k*', 'MarkerSize',10);
     end
 
-    % Plot tFNC source connectograms and matrices (large)
-    for j = 1:numel(ind.e)
-        F(N.fig) = figure; N.fig = N.fig + 1;
-        F(N.fig-1).Position = get(0,'screensize');
-        
-        % source matrices
-        axes(j,1) = subplot(1, 2, 1);
-        display_FNC(icatb_vec2mat(W(ind.e(j),:)), max(W,[],'all'));     % imagesc(icatb_vec2mat(W(ind.e(j),:)));
-        % colormap jet; clim([-lim.color lim.color]);
-        pbaspect([1 1 1]); colorbar; hold on
-        ylabel('Functional Networks'); xlabel('Functional Networks');
-        title(strjoin(["FNC of Component", num2str(ind.e(j))]), 'FontSize',16);
-        set(ax(j,1), {'XLim','YLim','XTick','YTick'}, {[0.5 N.ROI+0.5], [0.6 N.ROI+0.5], [], []}); hold on;
-
-        % source matrices
-        axes(j,1) = subplot(1, 2, 2);
-        icatb_plot_connectogram([], network_names, 'C', icatb_vec2mat(W(ind.e(j),:)), 'threshold',2, ...
-            'image_file_names',fname, 'colorbar_label','Source Weight', 'slice_plane','sagittal', ...
-            'conn_threshold',0.02, 'display_type','render', 'exclude_zeros',0, 'convert_to_zscores',0);
-    end
+    % % Plot tFNC source connectograms and matrices (large)
+    % for j = 1:numel(ind.e)
+    %     F(N.fig) = figure; N.fig = N.fig + 1;
+    %     F(N.fig-1).Position = get(0,'screensize');
+    % 
+    %     % source matrices
+    %     axes(j,1) = subplot(1, 2, 1);
+    %     display_FNC(icatb_vec2mat(W(ind.e(j),:)), [0.25 2.0], lim.color);     % imagesc(icatb_vec2mat(W(ind.e(j),:)));
+    %     % colormap jet; clim([-lim.color lim.color]);
+    %     pbaspect([1 1 1]); colorbar; hold on
+    %     ylabel('Functional Networks'); xlabel('Functional Networks');
+    %     title(strjoin(["FNC of Component", num2str(ind.e(j))]), 'FontSize',16);
+    %     set(ax(j,1), {'XLim','YLim','XTick','YTick'}, {[0.5 N.ROI+0.5], [0.6 N.ROI+0.5], [], []}); hold on;
+    % 
+    %     % source matrices
+    %     axes(j,1) = subplot(1, 2, 2);
+    %     icatb_plot_connectogram([], network_names, 'C', icatb_vec2mat(W(ind.e(j),:)), 'threshold',2, ...
+    %         'image_file_names',fname, 'colorbar_label','Source Weight', 'slice_plane','sagittal', ...
+    %         'conn_threshold',0.02, 'display_type','render', 'exclude_zeros',0, 'convert_to_zscores',0);
+    % end
 end
 clear k ts fname network_names n j
 
